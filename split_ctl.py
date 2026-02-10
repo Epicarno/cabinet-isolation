@@ -11,7 +11,7 @@ import re
 import csv
 from pathlib import Path
 from report_utils import write_report
-from parse_utils import read_text_safe, LCSMEMO_DIR, CTL_DIR, REPORT_DIR
+from parse_utils import read_text_safe, find_mnemo_dirs, LCSMEMO_DIR, CTL_DIR, REPORT_DIR
 
 CTL_FILE    = CTL_DIR / "PNR_Ventcontent.ctl"
 SCRIPTS_DIR = CTL_DIR
@@ -345,7 +345,7 @@ def main():
         print(f"Папка не найдена: {LCSMEMO_DIR}")
         return
 
-    cabinets = sorted([d.name for d in LCSMEMO_DIR.iterdir() if d.is_dir()])
+    cabinets = [d.name for d in find_mnemo_dirs()]
     print(f"\nШкафов: {len(cabinets)}")
 
     SCRIPTS_DIR.mkdir(parents=True, exist_ok=True)

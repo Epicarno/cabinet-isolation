@@ -62,6 +62,9 @@ call :run_step 8 "check_other_scripts.py (analysis -> JSON)" "python check_other
 if !FAIL! GTR 0 goto :done
 
 call :run_step 9 "cleanup_classes.py (uses JSON)" "python cleanup_classes.py !APPEND_FLAG!"
+if !FAIL! GTR 0 goto :done
+
+call :run_step 10 "collect_output.py (deploy)" "python collect_output.py --clean"
 
 :done
 echo.
@@ -86,23 +89,23 @@ set "S_CMD=%~3"
 
 if !ONLY_STEP! NEQ 0 if !ONLY_STEP! NEQ !S_NUM! goto :eof
 if !ONLY_STEP! EQU 0 if !S_NUM! LSS !FROM_STEP! (
-    echo [!S_NUM!/9] SKIP !S_NAME!
+    echo [!S_NUM!/10] SKIP !S_NAME!
     set /a "SKIP+=1"
     goto :eof
 )
 
 echo.
 echo --------------------------------------------------------
-echo [!S_NUM!/9] !S_NAME!
+echo [!S_NUM!/10] !S_NAME!
 echo --------------------------------------------------------
 
 !S_CMD!
 
 if !ERRORLEVEL! EQU 0 (
-    echo [!S_NUM!/9] OK
+    echo [!S_NUM!/10] OK
     set /a "PASS+=1"
 ) else (
-    echo [!S_NUM!/9] FAILED
+    echo [!S_NUM!/10] FAILED
     echo Pipeline stopped. To continue: run_pipeline.bat !APPEND_FLAG! --from !S_NUM!
     set /a "FAIL+=1"
 )

@@ -16,7 +16,7 @@
 import re
 from pathlib import Path
 from report_utils import write_report
-from parse_utils import read_text_safe, PANELS_DIR, OBJECTS_DIR, VISION_DIR, LCSMEMO_DIR, REPORT_DIR
+from parse_utils import read_text_safe, find_mnemo_dirs, find_cabinet_dirs, PANELS_DIR, OBJECTS_DIR, VISION_DIR, LCSMEMO_DIR, REPORT_DIR
 
 REPORT_FILE = REPORT_DIR / "missing_files_report.txt"
 
@@ -76,17 +76,11 @@ def build_reverse_map() -> dict[str, set[str]]:
 
     scan_dirs: list[Path] = []
 
-    # Мнемосхемы
-    if LCSMEMO_DIR.exists():
-        for d in LCSMEMO_DIR.iterdir():
-            if d.is_dir():
-                scan_dirs.append(d)
+    # Мнемосхемы (с учётом cabinets.txt)
+    scan_dirs.extend(find_mnemo_dirs())
 
-    # Объекты
-    if OBJECTS_DIR.exists():
-        for d in OBJECTS_DIR.iterdir():
-            if d.is_dir() and d.name.startswith("objects_"):
-                scan_dirs.append(d)
+    # Объекты (с учётом cabinets.txt)
+    scan_dirs.extend(find_cabinet_dirs(OBJECTS_DIR))
 
     for scan_dir in scan_dirs:
         for xml_file in scan_dir.rglob("*.xml"):

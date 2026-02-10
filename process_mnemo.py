@@ -12,7 +12,7 @@ import re
 import shutil
 from pathlib import Path
 from report_utils import write_report
-from parse_utils import read_text_safe, PANELS_DIR, OBJECTS_DIR, LCSMEMO_DIR, REPORT_DIR, OLD_MNEMO_DIR
+from parse_utils import read_text_safe, find_mnemo_dirs, PANELS_DIR, OBJECTS_DIR, LCSMEMO_DIR, REPORT_DIR, OLD_MNEMO_DIR
 
 REPORT_FILE = REPORT_DIR / "no_objects_found.txt"
 
@@ -112,14 +112,14 @@ def main():
 
     no_objects_files: list[str] = []
 
-    # Получаем список папок-шкафов
-    cabinets = sorted([d for d in LCSMEMO_DIR.iterdir() if d.is_dir()])
+    # Получаем список папок-шкафов (с учётом cabinets.txt)
+    cabinets = find_mnemo_dirs()
 
     if not cabinets:
-        print("Папки шкафов не найдены в vision/LCSMnemo/")
+        print("Папки шкафов не найдены (проверьте cabinets.txt)")
         return
 
-    print(f"Найдено шкафов: {len(cabinets)}\n")
+    print(f"Шкафов: {len(cabinets)}\n")
 
     for cabinet in cabinets:
         print(f"[Шкаф] {cabinet.name}")

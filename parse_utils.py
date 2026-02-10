@@ -15,7 +15,9 @@
 Утилиты:
 - read_text_safe() — чтение файла с fallback по кодировкам
 - find_matching_brace() — поиск закрывающей } с учётом строк/комментариев
-- find_cabinet_dirs() — поиск папок objects_<ШКАФ>/
+- load_active_cabinets() — чтение cabinets.txt (None = все)
+- find_cabinet_dirs() — поиск папок objects_<ШКАФ>/ с фильтрацией
+- find_mnemo_dirs() — поиск папок мнемосхем с фильтрацией
 """
 
 from pathlib import Path
@@ -113,11 +115,47 @@ def find_matching_brace(text: str, open_pos: int) -> int:
     return -1
 
 
+CABINETS_FILE = SCRIPT_DIR / "cabinets.txt"                 # список шкафов
+
+
+def load_active_cabinets() -> set[str] | None:
+    """Читает cabinets.txt → set имён. None = обрабатывать все."""
+    if not CABINETS_FILE.exists():
+        return None
+    names: set[str] = set()
+    for line in CABINETS_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            names.add(line)
+    return names if names else None
+
+
 def find_cabinet_dirs(objects_dir: Path) -> list[Path]:
-    """Возвращает отсортированный список папок objects_<ШКАФ>/."""
+    """Возвращает отсортированный список папок objects_<ШКАФ>/ (с учётом cabinets.txt)."""
     if not objects_dir.exists():
         return []
-    return sorted([
-        d for d in objects_dir.iterdir()
-        if d.is_dir() and d.name.startswith("objects_")
-    ])
+    active = load_active_cabinets()
+    dirs = []
+    for d in objects_dir.iterdir():
+        if not d.is_dir() or not d.name.startswith("objects_"):
+            continue
+        cab_name = d.name.replace("objects_", "", 1)
+        if active is not None and cab_name not in active:
+            continue
+        dirs.append(d)
+    return sorted(dirs)
+
+
+def find_mnemo_dirs() -> list[Path]:
+    """Возвращает отсортированный список папок шкафов в LCSMnemo/ (с учётом cabinets.txt)."""
+    if not LCSMEMO_DIR.exists():
+        return []
+    active = load_active_cabinets()
+    dirs = []
+    for d in LCSMEMO_DIR.iterdir():
+        if not d.is_dir():
+            continue
+        if active is not None and d.name not in active:
+            continue
+        dirs.append(d)
+    return sorted(dirs)
