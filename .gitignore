@@ -3,4 +3,5 @@ __pycache__/
 *.pyo
 .venv/
 .env
-контекст*.txt
+_msg.py
+.commitmsg
