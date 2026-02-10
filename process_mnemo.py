@@ -2,16 +2,17 @@
 Скрипт для обработки XML-файлов мнемосхем.
 
 1. Проходит по папкам шкафов в vision/LCSMnemo/
-2. В каждом XML-файле заменяет пути вида objects/... на objects/objects_<ШКАФ>/...
-3. Копирует соответствующие объекты из общей папки objects/ в objects/objects_<ШКАФ>/
-4. Создаёт отчёт no_objects_found.txt со списком XML, где не найдено путей objects
+2. Сохраняет оригинальные XML в Modules/old_mnemo/<ШКАФ>/ (бэкап)
+3. В каждом XML-файле заменяет пути вида objects/... на objects/objects_<ШКАФ>/...
+4. Копирует соответствующие объекты из общей папки objects/ в objects/objects_<ШКАФ>/
+5. Создаёт отчёт no_objects_found.txt со списком XML, где не найдено путей objects
 """
 
 import re
 import shutil
 from pathlib import Path
 from report_utils import write_report
-from parse_utils import read_text_safe, PANELS_DIR, OBJECTS_DIR, LCSMEMO_DIR, REPORT_DIR
+from parse_utils import read_text_safe, PANELS_DIR, OBJECTS_DIR, LCSMEMO_DIR, REPORT_DIR, OLD_MNEMO_DIR
 
 REPORT_FILE = REPORT_DIR / "no_objects_found.txt"
 
@@ -55,6 +56,14 @@ def process_cabinet(cabinet_path: Path, no_objects_files: list[str]):
         new_text = PATTERN.sub(lambda m: f"objects/objects_{cabinet_name}/{m.group(1)}", text)
 
         if new_text != text:
+            # Сохраняем оригинал в Modules/old_mnemo/<ШКАФ>/
+            rel = xml_file.relative_to(LCSMEMO_DIR)
+            backup = OLD_MNEMO_DIR / rel
+            if not backup.exists():
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(xml_file, backup)
+                print(f"  [←] Бэкап: old_mnemo/{rel}")
+            # Записываем изменённую версию
             xml_file.write_text(new_text, encoding="utf-8")
             print(f"  [✓] Обновлён: {xml_file.name}")
 

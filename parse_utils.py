@@ -10,6 +10,7 @@
 - LCSMEMO_DIR — шкафы (ventcontent/panels/vision/LCSMnemo/)
 - CTL_DIR     — скрипты WinCC OA (ventcontent/scripts/libs/objLogic/)
 - REPORT_DIR  — папка отчётов (Modules/reports/)
+- OLD_MNEMO_DIR — бэкап оригинальных мнемосхем (Modules/old_mnemo/)
 
 Утилиты:
 - read_text_safe() — чтение файла с fallback по кодировкам
@@ -28,6 +29,7 @@ VISION_DIR  = PANELS_DIR / "vision"                         # panels/vision/
 LCSMEMO_DIR = VISION_DIR / "LCSMnemo"                       # vision/LCSMnemo/
 CTL_DIR     = VENT_DIR / "scripts" / "libs" / "objLogic"    # scripts/libs/objLogic/
 REPORT_DIR  = SCRIPT_DIR.parent / "reports"                 # Modules/reports/
+OLD_MNEMO_DIR = SCRIPT_DIR.parent / "old_mnemo"             # Modules/old_mnemo/
 
 
 def read_text_safe(path: Path) -> str | None:
