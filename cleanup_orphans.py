@@ -123,22 +123,22 @@ def main():
         cabinet_name = cab_obj_dir.name.replace("objects_", "")
         print(f"\n[Шкаф] {cabinet_name}")
 
-        # Все XML файлы в папке шкафа
-        all_xmls = sorted(cab_obj_dir.rglob("*.xml"))
-        all_xml_rels = set()
-        for f in all_xmls:
-            all_xml_rels.add(str(f.relative_to(cab_obj_dir)).replace("\\", "/"))
+        # Все файлы в папке шкафа (не только XML)
+        all_files = sorted(f for f in cab_obj_dir.rglob("*") if f.is_file())
+        all_rels = set()
+        for f in all_files:
+            all_rels.add(str(f.relative_to(cab_obj_dir)).replace("\\", "/"))
 
-        # Собираем ссылки
+        # Собираем ссылки (только XML реально ссылаются)
         referenced = collect_referenced_files(cabinet_name, cab_obj_dir)
 
         # Лишние = есть в папке, но нет в ссылках
-        orphans = sorted(all_xml_rels - referenced)
+        orphans = sorted(all_rels - referenced)
 
         report_lines.append(f"[{cabinet_name}]")
-        report_lines.append(f"  Всего XML в папке: {len(all_xml_rels)}")
-        report_lines.append(f"  Используемых:      {len(all_xml_rels) - len(orphans)}")
-        report_lines.append(f"  Лишних:            {len(orphans)}")
+        report_lines.append(f"  Всего файлов в папке: {len(all_rels)}")
+        report_lines.append(f"  Используемых:         {len(all_rels) - len(orphans)}")
+        report_lines.append(f"  Лишних:               {len(orphans)}")
 
         if orphans:
             report_lines.append(f"  Лишние файлы:")
