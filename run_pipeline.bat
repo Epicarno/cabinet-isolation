@@ -49,24 +49,31 @@ if !FAIL! GTR 0 goto :done
 call :run_step 4 "clean_commented_refs.py" "python clean_commented_refs.py --apply !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
+cd .
 call :run_step 5 "validate_refs.py" "python validate_refs.py !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
-call :run_step 6 "split_ctl.py" "python split_ctl.py !APPEND_FLAG!"
+cd .
+call :run_step 6 "split_ctl.py" "python split_ctl.py"
 if !FAIL! GTR 0 goto :done
 
+cd .
 call :run_step 7 "replace_scripts.py" "python replace_scripts.py !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
+cd .
 call :run_step 8 "scan_problems.py (analysis)" "python scan_problems.py !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
+cd .
 call :run_step 9 "check_other_scripts.py (analysis -> JSON)" "python check_other_scripts.py !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
+cd .
 call :run_step 10 "cleanup_classes.py (uses JSON)" "python cleanup_classes.py !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
+cd .
 call :run_step 11 "collect_output.py (deploy)" "python collect_output.py --clean"
 
 :done
@@ -103,8 +110,9 @@ echo [!S_NUM!/11] !S_NAME!
 echo --------------------------------------------------------
 
 !S_CMD!
+set "RC=!ERRORLEVEL!"
 
-if !ERRORLEVEL! EQU 0 (
+if !RC! EQU 0 (
     echo [!S_NUM!/11] OK
     set /a "PASS+=1"
 ) else (
