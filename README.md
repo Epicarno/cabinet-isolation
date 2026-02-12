@@ -36,7 +36,19 @@ Modules/
 │   ├── report_utils.py             ← запись отчётов (--append режим)
 │   ├── run_pipeline.bat            ← запуск пайплайна
 │   ├── collect_output.py           ← сборка деплой-папок
-│   └── *.py                        ← скрипты пайплайна (см. ниже)
+│   ├── *.py                        ← скрипты пайплайна (см. ниже)
+│   └── dp_scripts/                 ← работа с DPL-файлами (валидация, очистка)
+│       ├── validate_structs.py     ← CSV struct ↔ DPL DpType
+│       ├── validate_dpl_points.py  ← DPL ↔ мнемо ↔ CNS
+│       └── clean_dpl.py            ← удаление DP из DPL
+│
+├── DPLs/                           ← DPL-файлы (Datapoint List)
+│   ├── SHD_03_1/
+│   │   ├── other.dpl            ← основные точки
+│   │   ├── di_and_oip.dpl      ← физические (DI/OIP)
+│   │   ├── cns.dpl             ← CNS-дерево
+│   │   └── backup/             ← бэкапы (clean_dpl.py)
+│   └── ...
 │
 ├── ventcontent/                    ← проект WinCC OA
 │   ├── panels/
@@ -168,8 +180,14 @@ python classify_datapoints.py SHD_12     # один шкаф
 
 Три типа преобразований:
 - **PREFIX** (основной) — добавляет блок-префикс: `SHD_03_1>P3_V3>DI>KZ1` → `B3>SHD_03_1>P3_V3>DI>KZ1`
+- **PHYSICAL** (физические точки) — StSign/OIP точки раскладываются по подсистемам: `SHUOD_03_1_StSign_3` → `B3>SHUOD_03_1>D109>DI>StSign_3`
 - **RESTRUCTURED** (исключения) — перестройка сегментов помимо префикса, берётся напрямую из таблицы
 - **FLAT** — точки без `>`: `SHD_7_A1_2` → `B7>SHD_7_A1_2`
+
+Подсистемы физических точек (SHUOD_03_1, SHKZIAV_03_1):
+- `D109`, `D119`, `D120`, `D121`, `D121A` — двери/помещения (ШУОД)
+- `GAS`, `ALRT_ST`, `ALRT_R106`, `EVENT` — газ, оповещение, вентиляция (ШКЗиАВ)
+- `FIRE`, `DIAG`, `RSRV_*` — пожар, диагностика, резервы
 
 ```bash
 python rename_kks.py                     # dry-run по всем шкафам
@@ -178,6 +196,49 @@ python rename_kks.py --dry-run SHD_12    # только шкаф SHD_12
 ```
 
 **Внимание**: `--dry-run` включён по умолчанию. Для реального изменения файлов нужен `--apply`.
+
+## Скрипты DPL (`dp_scripts/`)
+
+Инструменты для работы с DPL-файлами (Datapoint List) WinCC OA. Запускаются из папки `scripts/dp_scripts/`.
+
+Данные: DPL-файлы в `DPLs/<ШКАФ>/`, CSV-описания мнемосхем в `LCSMnemo/<ШКАФ>/`.
+
+### `validate_structs.py` — CSV struct ↔ DPL DpType
+
+Сравнивает значения колонки `struct` из CSV с типами в секции `# DpType` DPL-файлов. Выявляет несовпадения, классифицирует как ERROR/WARN/INFO.
+
+```bash
+cd dp_scripts
+python validate_structs.py SHD_03_1
+```
+
+### `validate_dpl_points.py` — 4 проверки DPL
+
+1. **DPL ↔ мнемо** — какие точки есть в DPL, но нет на мнемосхемах (и наоборот)
+2. **CSV struct ↔ DPL instance type** — тип в CSV совпадает с типом экземпляра в DPL
+3. **CNS ↔ DPL** — ссылки в CNS секции на несуществующие DP
+4. **_Static** — проверка что _Static-точки из CSV присутствуют в DPL
+
+```bash
+cd dp_scripts
+python validate_dpl_points.py SHD_03_1
+```
+
+Результат: 4 отчёта в `reports/` — `*_dpl_vs_mnemo.txt`, `*_dpl_vs_csv_types.txt`, `*_cns_orphans.txt`, `*_static_analysis.txt`.
+
+### `clean_dpl.py` — Очистка DPL-файлов
+
+Удаляет экземпляры DP из всех секций DPL (Datapoint, Aliases, DpValue, Distribution, Periph, CNS и др.).
+Автобэкап в `DPLs/<шкаф>/backup/`.
+
+```bash
+cd dp_scripts
+python clean_dpl.py SHD_03_1 --remove "SHD_03_1>ITP2>AI>P3" --dry-run
+python clean_dpl.py SHD_03_1 --clean-cns-orphans --dry-run
+python clean_dpl.py SHD_03_1 --remove-unused-types --dry-run
+```
+
+**`--dry-run`** — по умолчанию. Без него — реальное удаление с бэкапом.
 
 ## Общие модули
 

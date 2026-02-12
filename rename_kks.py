@@ -39,6 +39,72 @@ from collections import defaultdict
 # Пути
 # ---------------------------------------------------------------------------
 SCRIPT_DIR = Path(__file__).resolve().parent
+
+# ---------------------------------------------------------------------------
+# Маппинг физических точек (StSign / OIP) → подсистема
+# Формат KKS: Block>Cabinet>Subsystem>SignalType>PointName
+# ---------------------------------------------------------------------------
+# Обратный индекс строится автоматически функцией _build_physical_index()
+
+PHYSICAL_GROUPS: dict[str, dict[str, dict[str, list[int]]]] = {
+    # ---- SHUOD_03_1: организовано по помещениям (двери) ----
+    "SHUOD_03_1": {
+        "D109":        {"DI": [1, 2, 3, 4, 65, 69]},
+        "D121A":       {"DI": [5, 6, 7, 8, 66, 70]},
+        "D121":        {"DI": [9, 10, 11, 12, 67, 71]},
+        "D120":        {"DI": [13, 14, 15, 16, 68, 72]},
+        "D119":        {"DI": [17, 18, 19, 20, 73, 77]},
+        "FIRE":        {"DI": [21]},
+        "DIAG":        {"DI": [27, 28, 29, 30, 31, 32, 62, 63, 64, 97]},
+        "RSRV_DI_A14": {"DI": list(range(22, 27))},
+        "RSRV_DI_A15": {"DI": list(range(33, 62))},
+        "RSRV_DO_A13": {"DO": [74, 75, 76, 78, 79, 80]},
+        "RSRV_DO_A14": {"DO": list(range(81, 97))},
+    },
+    # ---- SHKZIAV_03_1: организовано по функциям ----
+    "SHKZIAV_03_1": {
+        "ALRT_ST":   {"DI": [1, 17, 18, 19]},
+        "ALRT_R106": {"DI": [2, 20, 21, 22]},
+        "GAS":       {"DI": [3, 4], "AI": [1]},       # OIP_1 = AI
+        "EVENT":     {"DI": [23, 24]},
+        "FIRE":      {"DI": [5]},
+        "DIAG":      {"DI": [8, 9, 10, 11, 12, 13, 14, 15, 16, 33]},
+        "RSRV_DI":   {"DI": [6, 7]},
+        "RSRV_DO":   {"DO": list(range(25, 33))},
+        "RSRV_AI":   {"AI": list(range(2, 13))},
+    },
+}
+
+# Алиасы шкафов: вариант написания в XML → каноническое имя в PHYSICAL_GROUPS
+# (в XML может быть SHKZIAV_03_1, а в Excel/DPL — SHKZiAV_03_1)
+_CAB_ALIASES: dict[str, str] = {
+    "SHKZIAV_03_1": "SHKZIAV_03_1",
+    "SHKZiAV_03_1": "SHKZIAV_03_1",
+}
+
+# Обратный индекс: (cabinet, point_type, number) → (subsystem, signal_type)
+# point_type = "StSign" или "OIP"
+# cabinet — каноническое имя из PHYSICAL_GROUPS
+_PHYSICAL_INDEX: dict[tuple[str, str, int], tuple[str, str]] = {}
+
+
+def _build_physical_index() -> None:
+    """Строим обратный индекс из PHYSICAL_GROUPS."""
+    for cab, groups in PHYSICAL_GROUPS.items():
+        for subsystem, signals in groups.items():
+            for sig_type, numbers in signals.items():
+                for n in numbers:
+                    # DI/DO → StSign, AI → OIP
+                    pt = "OIP" if sig_type == "AI" else "StSign"
+                    _PHYSICAL_INDEX[(cab, pt, n)] = (subsystem, sig_type)
+
+
+def _normalize_cab(cab: str) -> str:
+    """Нормализуем имя шкафа: SHKZiAV_03_1 → SHKZIAV_03_1 и т.д."""
+    return _CAB_ALIASES.get(cab, cab)
+
+
+_build_physical_index()
 MODULES_DIR = SCRIPT_DIR.parent
 EXCEL_FILE  = MODULES_DIR / "Применение KKS - ОП СПб.xlsx"
 REPORT_DIR  = MODULES_DIR / "reports"
@@ -110,13 +176,14 @@ def extract_cabinet(dp_name: str, cab_to_block: dict[str, str]) -> str | None:
     """
     if ">" in dp_name:
         cab_candidate = dp_name.split(">")[0]
-        if cab_candidate in cab_to_block:
-            return cab_candidate
+        found = _find_cab(cab_candidate, cab_to_block)
+        if found:
+            return found
     else:
         # Без разделителя — ищем самый длинный подходящий шкаф-префикс
         best = None
         for cab in cab_to_block:
-            if dp_name.startswith(cab) and (best is None or len(cab) > len(best)):
+            if dp_name.lower().startswith(cab.lower()) and (best is None or len(cab) > len(best)):
                 best = cab
         return best
     return None
@@ -139,12 +206,66 @@ def transform_dp(dp_name: str,
     if dp_name in explicit_map:
         return explicit_map[dp_name]
 
-    # 3) Общее правило: добавить БЛОК> перед DP
+    # 3) Физические точки: Cabinet_StSign_N / Cabinet_OIP_N
+    #    → Block>Cabinet>Subsystem>SignalType>PointName
+    phys = _try_physical_transform(dp_name, cab_to_block)
+    if phys is not None:
+        return phys
+
+    # 4) Общее правило: добавить БЛОК> перед DP
     cab = extract_cabinet(dp_name, cab_to_block)
     if cab is None:
         return None  # неизвестный шкаф — не трогаем
     block = cab_to_block[cab]
     return f"{block}>{dp_name}"
+
+
+# Regex для разбора физических точек: Cabinet_StSign_N или Cabinet_OIP_N
+_PHYS_RE = re.compile(r'^(.+?)_(StSign|OIP)_(\d+)$')
+
+
+def _find_cab(name: str, cab_to_block: dict[str, str]) -> str | None:
+    """Ищем шкаф в cab_to_block, допуская разницу в регистре (SHKZiAV vs SHKZIAV)."""
+    if name in cab_to_block:
+        return name
+    low = name.lower()
+    for cab in cab_to_block:
+        if cab.lower() == low:
+            return cab
+    return None
+
+
+def _try_physical_transform(dp_name: str,
+                            cab_to_block: dict[str, str]) -> str | None:
+    """Пытаемся преобразовать физическую точку через PHYSICAL_GROUPS.
+
+    Формат входа:  SHUOD_03_1_StSign_3
+    Формат выхода: B3>SHUOD_03_1>D109>DI>StSign_3
+    """
+    m = _PHYS_RE.match(dp_name)
+    if not m:
+        return None
+
+    raw_cab = m.group(1)   # SHUOD_03_1  или  SHKZiAV_03_1 / SHKZIAV_03_1
+    pt      = m.group(2)   # StSign / OIP
+    num     = int(m.group(3))  # 3
+
+    # Ищем шкаф в cab_to_block (case-insensitive)
+    real_cab = _find_cab(raw_cab, cab_to_block)
+    if real_cab is None:
+        return None
+
+    canon_cab = _normalize_cab(raw_cab)
+    key = (canon_cab, pt, num)
+    if key not in _PHYSICAL_INDEX:
+        # Точка не в маппинге — используем общее правило (Block>flatDP)
+        block = cab_to_block[real_cab]
+        return f"{block}>{dp_name}"
+
+    subsystem, sig_type = _PHYSICAL_INDEX[key]
+    block = cab_to_block[real_cab]
+    # Сохраняем оригинальное написание шкафа из DP (raw_cab)
+    return f"{block}>{raw_cab}>{subsystem}>{sig_type}>{pt}_{num}"
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +417,9 @@ def main() -> None:
     # Группируем по типу замены
     change_types: dict[str, int] = defaultdict(int)
     for _, old, new in all_changes:
-        if ">" not in old:
+        if _PHYS_RE.match(old):
+            change_types["PHYSICAL (StSign/OIP → подсистема)"] += 1
+        elif ">" not in old:
             change_types["flat DP (без >)"] += 1
         elif new.split(">")[1:] == old.split(">"):
             change_types["PREFIX (добавлен блок)"] += 1
