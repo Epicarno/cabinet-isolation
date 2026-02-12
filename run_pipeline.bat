@@ -46,25 +46,28 @@ if !FAIL! GTR 0 goto :done
 call :run_step 3 "cleanup_orphans.py (mode 2)" "python cleanup_orphans.py 2 !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
-call :run_step 4 "validate_refs.py" "python validate_refs.py !APPEND_FLAG!"
+call :run_step 4 "clean_commented_refs.py" "python clean_commented_refs.py --apply !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
-call :run_step 5 "split_ctl.py" "python split_ctl.py !APPEND_FLAG!"
+call :run_step 5 "validate_refs.py" "python validate_refs.py !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
-call :run_step 6 "replace_scripts.py" "python replace_scripts.py !APPEND_FLAG!"
+call :run_step 6 "split_ctl.py" "python split_ctl.py !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
-call :run_step 7 "scan_problems.py (analysis)" "python scan_problems.py !APPEND_FLAG!"
+call :run_step 7 "replace_scripts.py" "python replace_scripts.py !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
-call :run_step 8 "check_other_scripts.py (analysis -> JSON)" "python check_other_scripts.py !APPEND_FLAG!"
+call :run_step 8 "scan_problems.py (analysis)" "python scan_problems.py !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
-call :run_step 9 "cleanup_classes.py (uses JSON)" "python cleanup_classes.py !APPEND_FLAG!"
+call :run_step 9 "check_other_scripts.py (analysis -> JSON)" "python check_other_scripts.py !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
-call :run_step 10 "collect_output.py (deploy)" "python collect_output.py --clean"
+call :run_step 10 "cleanup_classes.py (uses JSON)" "python cleanup_classes.py !APPEND_FLAG!"
+if !FAIL! GTR 0 goto :done
+
+call :run_step 11 "collect_output.py (deploy)" "python collect_output.py --clean"
 
 :done
 echo.
@@ -89,23 +92,23 @@ set "S_CMD=%~3"
 
 if !ONLY_STEP! NEQ 0 if !ONLY_STEP! NEQ !S_NUM! goto :eof
 if !ONLY_STEP! EQU 0 if !S_NUM! LSS !FROM_STEP! (
-    echo [!S_NUM!/10] SKIP !S_NAME!
+    echo [!S_NUM!/11] SKIP !S_NAME!
     set /a "SKIP+=1"
     goto :eof
 )
 
 echo.
 echo --------------------------------------------------------
-echo [!S_NUM!/10] !S_NAME!
+echo [!S_NUM!/11] !S_NAME!
 echo --------------------------------------------------------
 
 !S_CMD!
 
 if !ERRORLEVEL! EQU 0 (
-    echo [!S_NUM!/10] OK
+    echo [!S_NUM!/11] OK
     set /a "PASS+=1"
 ) else (
-    echo [!S_NUM!/10] FAILED
+    echo [!S_NUM!/11] FAILED
     echo Pipeline stopped. To continue: run_pipeline.bat !APPEND_FLAG! --from !S_NUM!
     set /a "FAIL+=1"
 )
