@@ -37,15 +37,19 @@ if !ONLY_STEP! NEQ 0 echo   Only step: !ONLY_STEP!
 echo   Directory: %cd%
 echo.
 
+cd .
 call :run_step 1 "process_mnemo.py" "python process_mnemo.py !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
+cd .
 call :run_step 2 "fix_cross_refs.py" "python fix_cross_refs.py !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
+cd .
 call :run_step 3 "cleanup_orphans.py (mode 2)" "python cleanup_orphans.py 2 !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
+cd .
 call :run_step 4 "clean_commented_refs.py" "python clean_commented_refs.py --apply !APPEND_FLAG!"
 if !FAIL! GTR 0 goto :done
 
