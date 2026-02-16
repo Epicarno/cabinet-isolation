@@ -30,6 +30,10 @@ from parse_utils import (
     OBJECTS_DIR, LCSMEMO_DIR, CTL_DIR,
 )
 
+# Windows cp866/cp1251 ломает Unicode → форсируем UTF-8
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 OUTPUT_DIR = SCRIPT_DIR.parent / "output"
 
 # Базовый путь — родитель ventcontent (т.е. Modules/)

@@ -34,7 +34,8 @@ Modules/
 │   ├── cabinets.txt                ← список шкафов для обработки (фильтр)
 │   ├── parse_utils.py              ← общие утилиты и пути проекта
 │   ├── report_utils.py             ← запись отчётов (--append режим)
-│   ├── run_pipeline.bat            ← запуск пайплайна
+│   ├── run_pipeline.py              ← раннер пайплайна (основной)
+│   ├── run_pipeline.bat            ← обёртка для запуска из CMD
 │   ├── collect_output.py           ← сборка деплой-папок
 │   ├── *.py                        ← скрипты пайплайна (см. ниже)
 │   └── dp_scripts/                 ← работа с DPL-файлами (валидация, очистка)
@@ -95,7 +96,7 @@ Modules/
 └── Применение KKS - ОП СПб.xlsx   ← правила переименования KKS (вход для rename_kks.py)
 ```
 
-## Пайплайн (10 шагов)
+## Пайплайн (11 шагов)
 
 ### Выбор шкафов
 
@@ -114,12 +115,22 @@ SHD_05_1
 
 ### Запуск
 
+Основной раннер — `run_pipeline.py` (Python). Файл `run_pipeline.bat` — тонкая обёртка, которая просто вызывает `python run_pipeline.py %*`.
+
 ```bash
+# Через bat-обёртку (для CMD):
 run_pipeline.bat                    # полный запуск
 run_pipeline.bat --append           # дописывать в существующие отчёты
 run_pipeline.bat --from 5           # продолжить с шага 5
 run_pipeline.bat --only 10          # запустить только шаг 10
+
+# Напрямую через Python (рекомендуется):
+python run_pipeline.py              # полный запуск
+python run_pipeline.py --from 5     # продолжить с шага 5
+python run_pipeline.py --only 8     # только шаг 8
 ```
+
+> **Кодировка**: все скрипты пайплайна устанавливают `sys.stdout.reconfigure(encoding='utf-8')` при запуске. Раннер дополнительно передаёт `PYTHONIOENCODING=utf-8` в subprocess. Это гарантирует корректный вывод на Windows-консолях (cp866/cp1251) без `UnicodeEncodeError`.
 
 ### Шаги
 

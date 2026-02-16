@@ -10,10 +10,15 @@
 """
 
 import re
+import sys
 import json
 from pathlib import Path
 from report_utils import write_report
 from parse_utils import read_text_safe, find_cabinet_dirs, PANELS_DIR, OBJECTS_DIR, CTL_DIR, REPORT_DIR
+
+# Windows cp866/cp1251 ломает Unicode → форсируем UTF-8
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 SCRIPTS_DIR  = CTL_DIR
 SCRIPTS_LIBS = CTL_DIR  # где лежат .ctl

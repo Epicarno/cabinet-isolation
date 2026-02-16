@@ -10,9 +10,14 @@
 """
 
 import re
+import sys
 from pathlib import Path
 from report_utils import write_report
 from parse_utils import read_text_safe, PANELS_DIR, OBJECTS_DIR, REPORT_DIR
+
+# Windows cp866/cp1251 ломает Unicode → форсируем UTF-8
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 REPORT_FILE = REPORT_DIR / "problem_scan_report.txt"
 
