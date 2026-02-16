@@ -9,6 +9,7 @@ rename_kks.py — Переименование точек данных (datapoin
 Обрабатывает:
   1) XML мнемосхемы  (LCSMnemo/*/  )  — атрибут Name="" в <reference>
   2) XML объекты     (objects_*/    )  — при наличии DP в Name=""
+  3) CSV мнемосхемы  (LCSMnemo/*/*.csv) — колонки refName, dpName (--csv)
 
 Правила:
   ОСНОВНОЕ:  старый DP начинается с <ШКАФ>…  →  добавляем «<БЛОК>» спереди
@@ -20,16 +21,20 @@ rename_kks.py — Переименование точек данных (datapoin
 Режимы:
   --dry-run  (по умолчанию) — только отчёт, файлы не трогаем
   --apply                  — реально записываем изменения
+  --csv                    — обрабатывать CSV файлы вместо XML
 
 Использование:
-  python rename_kks.py                   # dry-run по всем шкафам
-  python rename_kks.py --apply           # применить замены
+  python rename_kks.py                   # dry-run XML по всем шкафам
+  python rename_kks.py --apply           # применить замены в XML
+  python rename_kks.py --csv             # dry-run CSV
+  python rename_kks.py --csv --apply     # применить замены в CSV
   python rename_kks.py --dry-run SHD_12  # только шкаф SHD_12
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import re
 import sys
 from pathlib import Path
@@ -350,6 +355,122 @@ def collect_xml_files(cab_to_block: dict[str, str],
     return xmls
 
 
+# ---------------------------------------------------------------------------
+# Обработка CSV
+# ---------------------------------------------------------------------------
+
+def collect_csv_files(cab_to_block: dict[str, str],
+                      cabinets_filter: list[str] | None) -> list[Path]:
+    """Собираем CSV из LCSMnemo + objects_ + output."""
+    csvs: list[Path] = []
+
+    # Мнемосхемы
+    if MNEMO_DIR.is_dir():
+        for cab_dir in sorted(MNEMO_DIR.iterdir()):
+            if not cab_dir.is_dir():
+                continue
+            if cabinets_filter and cab_dir.name not in cabinets_filter:
+                continue
+            csvs.extend(sorted(cab_dir.rglob("*.csv")))
+
+    # objects_*/
+    for obj_dir in sorted(MODULES_DIR.glob("objects_*")):
+        if not obj_dir.is_dir():
+            continue
+        cab_name = obj_dir.name.removeprefix("objects_")
+        if cabinets_filter and cab_name not in cabinets_filter:
+            continue
+        csvs.extend(sorted(obj_dir.rglob("*.csv")))
+
+    # output/
+    output_dir = MODULES_DIR / "output"
+    if output_dir.is_dir():
+        for cab_dir in sorted(output_dir.iterdir()):
+            if not cab_dir.is_dir():
+                continue
+            if cabinets_filter and cab_dir.name not in cabinets_filter:
+                continue
+            csvs.extend(sorted(cab_dir.rglob("*.csv")))
+
+    return csvs
+
+
+def process_csv_file(csv_path: Path,
+                     cab_to_block: dict[str, str],
+                     explicit_map: dict[str, str],
+                     apply: bool) -> list[tuple[str, str]]:
+    """Обрабатываем один CSV-файл: переименовываем refName (col0) и dpName (col1).
+
+    CSV формат:  refName,dpName,System,ObjctType,struct,CommonDP
+    Поле dpName может содержать несколько DP через "|".
+    """
+    try:
+        text = csv_path.read_text(encoding="utf-8")
+    except Exception:
+        try:
+            text = csv_path.read_text(encoding="cp1251")
+        except Exception:
+            return []
+
+    lines = text.split('\n')
+    changes: list[tuple[str, str]] = []
+    new_lines: list[str] = []
+    changed = False
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped or i == 0 and 'refName' in stripped:
+            new_lines.append(line)
+            continue
+
+        parts = line.split(',')
+        if len(parts) < 2:
+            new_lines.append(line)
+            continue
+
+        modified = False
+
+        # col 0: refName
+        ref_name = parts[0].strip()
+        if ref_name:
+            new_ref = transform_dp(ref_name, cab_to_block, explicit_map)
+            if new_ref is not None:
+                changes.append((ref_name, new_ref))
+                parts[0] = new_ref
+                modified = True
+
+        # col 1: dpName — может содержать "|" (несколько DP)
+        dp_field = parts[1].strip()
+        if dp_field:
+            dp_items = dp_field.split('|')
+            new_items: list[str] = []
+            for dp_item in dp_items:
+                dp_item = dp_item.strip()
+                if not dp_item:
+                    new_items.append(dp_item)
+                    continue
+                new_dp = transform_dp(dp_item, cab_to_block, explicit_map)
+                if new_dp is not None:
+                    changes.append((dp_item, new_dp))
+                    new_items.append(new_dp)
+                    modified = True
+                else:
+                    new_items.append(dp_item)
+            if modified:
+                parts[1] = '|'.join(new_items)
+
+        if modified:
+            changed = True
+            new_lines.append(','.join(parts))
+        else:
+            new_lines.append(line)
+
+    if changed and apply:
+        csv_path.write_text('\n'.join(new_lines), encoding="utf-8", newline="\n")
+
+    return changes
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Переименование точек данных по стандарту KKS"
@@ -361,6 +482,10 @@ def main() -> None:
     parser.add_argument(
         "--dry-run", action="store_true", default=True,
         help="Только отчёт, файлы не трогаем (по умолчанию)"
+    )
+    parser.add_argument(
+        "--csv", action="store_true",
+        help="Обрабатывать CSV файлы вместо XML"
     )
     parser.add_argument(
         "cabinets", nargs="*",
@@ -385,27 +510,35 @@ def main() -> None:
     cabinets_filter = args.cabinets if args.cabinets else None
 
     # Собираем файлы
-    xmls = collect_xml_files(cab_to_block, cabinets_filter)
-    print(f"  XML-файлов для обработки: {len(xmls)}")
+    if args.csv:
+        files = collect_csv_files(cab_to_block, cabinets_filter)
+        file_type = "CSV"
+    else:
+        files = collect_xml_files(cab_to_block, cabinets_filter)
+        file_type = "XML"
+    print(f"  {file_type}-файлов для обработки: {len(files)}")
 
-    if not xmls:
+    if not files:
         print("Нет файлов для обработки.")
         return
 
     # Обрабатываем
     mode_label = "APPLY" if args.apply else "DRY-RUN"
-    print(f"\nРежим: {mode_label}\n")
+    print(f"\nРежим: {mode_label} ({file_type})\n")
 
     total_changes = 0
     files_changed = 0
     all_changes: list[tuple[Path, str, str]] = []
 
-    for xml in xmls:
-        changes = process_file(xml, cab_to_block, explicit_map, apply=args.apply)
+    for f in files:
+        if args.csv:
+            changes = process_csv_file(f, cab_to_block, explicit_map, apply=args.apply)
+        else:
+            changes = process_file(f, cab_to_block, explicit_map, apply=args.apply)
         if changes:
             files_changed += 1
             total_changes += len(changes)
-            rel = xml.relative_to(MODULES_DIR)
+            rel = f.relative_to(MODULES_DIR)
             for old, new in changes:
                 all_changes.append((rel, old, new))
 
@@ -433,7 +566,8 @@ def main() -> None:
 
     # Сохраняем отчёт
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    report_file = REPORT_DIR / "kks_rename.txt"
+    suffix = "_csv" if args.csv else ""
+    report_file = REPORT_DIR / f"kks_rename{suffix}.txt"
     with open(report_file, "w", encoding="utf-8") as f:
         f.write(f"KKS Rename Report ({mode_label})\n")
         f.write(f"{'='*60}\n")
