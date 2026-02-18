@@ -17,7 +17,7 @@ import re
 import sys
 from pathlib import Path
 from report_utils import write_report
-from parse_utils import read_text_safe, find_mnemo_dirs, find_cabinet_dirs, PANELS_DIR, OBJECTS_DIR, VISION_DIR, LCSMEMO_DIR, REPORT_DIR
+from parse_utils import read_text_safe, strip_comments, find_mnemo_dirs, find_cabinet_dirs, PANELS_DIR, OBJECTS_DIR, VISION_DIR, LCSMEMO_DIR, REPORT_DIR
 
 # Windows cp866/cp1251 ломает Unicode → форсируем UTF-8
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -26,51 +26,8 @@ sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 REPORT_FILE = REPORT_DIR / "missing_files_report.txt"
 
 PATTERN = re.compile(r'objects/[^\s"\'<>]+?\.xml')
-
-# Многострочные комментарии /* ... */
-MULTI_COMMENT = re.compile(r'/\*.*?\*/', re.DOTALL)
-
-
-def strip_comments(text: str) -> str:
-    """Убирает комментарии из текста, оставляя только рабочий код.
-    Не трогает // внутри строковых литералов (например URL)."""
-    # 1. Убираем многострочные /* ... */
-    text = MULTI_COMMENT.sub('', text)
-
-    # 2. Убираем однострочные // (но не внутри строк)
-    lines = text.split('\n')
-    cleaned = []
-    for line in lines:
-        result = []
-        in_string = False
-        string_char = None
-        i = 0
-        while i < len(line):
-            c = line[i]
-            if in_string:
-                result.append(c)
-                if c == '\\' and i + 1 < len(line):
-                    result.append(line[i + 1])
-                    i += 2
-                    continue
-                if c == string_char:
-                    in_string = False
-                i += 1
-            else:
-                if c in ('"', "'"):
-                    in_string = True
-                    string_char = c
-                    result.append(c)
-                    i += 1
-                elif c == '/' and i + 1 < len(line) and line[i + 1] == '/':
-                    break  # комментарий — обрезаем остаток строки
-                else:
-                    result.append(c)
-                    i += 1
-        cleaned.append(''.join(result))
-
-    return '\n'.join(cleaned)
-
+# pathFS без .xml: /objects/objects_<ШКАФ>/PV/FPs/heatControl_...
+PATTERN_PATHFS = re.compile(r'/(objects/[^\s"\'<>]+?)(?=</prop>|")')
 
 def build_reverse_map() -> dict[str, set[str]]:
     """
@@ -100,6 +57,13 @@ def build_reverse_map() -> dict[str, set[str]]:
 
             for match in PATTERN.finditer(clean_text):
                 ref_path = match.group(0)
+                if ref_path not in reverse:
+                    reverse[ref_path] = set()
+                reverse[ref_path].add(file_rel)
+
+            # pathFS без .xml — добавляем .xml для проверки существования
+            for match in PATTERN_PATHFS.finditer(clean_text):
+                ref_path = match.group(1) + ".xml"
                 if ref_path not in reverse:
                     reverse[ref_path] = set()
                 reverse[ref_path].add(file_rel)

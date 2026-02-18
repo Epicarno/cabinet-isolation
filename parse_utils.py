@@ -20,6 +20,7 @@
 - find_mnemo_dirs() — поиск папок мнемосхем с фильтрацией
 """
 
+import re
 from pathlib import Path
 
 # === Общие пути проекта ===
@@ -42,6 +43,54 @@ def read_text_safe(path: Path) -> str | None:
         except (UnicodeDecodeError, OSError):
             continue
     return None
+
+
+# Многострочные комментарии /* ... */
+_MULTI_COMMENT = re.compile(r'/\*.*?\*/', re.DOTALL)
+
+
+def strip_comments(text: str) -> str:
+    """Убирает комментарии из текста, оставляя только рабочий код.
+    Обрабатывает:
+      - многострочные /* ... */
+      - однострочные //  (не трогает // внутри строковых литералов)
+    """
+    # 1. Убираем многострочные /* ... */
+    text = _MULTI_COMMENT.sub('', text)
+
+    # 2. Убираем однострочные // (но не внутри строк)
+    lines = text.split('\n')
+    cleaned = []
+    for line in lines:
+        result = []
+        in_string = False
+        string_char = None
+        i = 0
+        while i < len(line):
+            c = line[i]
+            if in_string:
+                result.append(c)
+                if c == '\\' and i + 1 < len(line):
+                    result.append(line[i + 1])
+                    i += 2
+                    continue
+                if c == string_char:
+                    in_string = False
+                i += 1
+            else:
+                if c in ('"', "'"):
+                    in_string = True
+                    string_char = c
+                    result.append(c)
+                    i += 1
+                elif c == '/' and i + 1 < len(line) and line[i + 1] == '/':
+                    break  # комментарий — обрезаем остаток строки
+                else:
+                    result.append(c)
+                    i += 1
+        cleaned.append(''.join(result))
+
+    return '\n'.join(cleaned)
 
 
 def find_matching_brace(text: str, open_pos: int) -> int:

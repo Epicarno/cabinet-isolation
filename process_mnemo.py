@@ -25,6 +25,10 @@ REPORT_FILE = REPORT_DIR / "no_objects_found.txt"
 # Но НЕ уже заменённые (objects/objects_...)
 PATTERN = re.compile(r'objects/(?!objects_)(.*?\.xml)')
 
+# Паттерн для pathFS: /objects/PV/FPs/heatControl_SHD_03_1_P6  (без .xml, с ведущим /)
+# WinCC OA автоматически добавляет .xml при открытии фейсплейта
+PATTERN_PATHFS = re.compile(r'/objects/(?!objects_)([^"<>\s]+?)(?=</prop>|")')
+
 
 def process_cabinet(cabinet_path: Path, no_objects_files: list[str]):
     """Обработка одной папки-шкафа."""
@@ -46,19 +50,28 @@ def process_cabinet(cabinet_path: Path, no_objects_files: list[str]):
         # Ищем все вхождения objects/...xml
         matches = PATTERN.findall(text)
 
-        if not matches:
+        # Ищем pathFS без .xml: /objects/PV/FPs/heatControl_...
+        pathfs_matches = PATTERN_PATHFS.findall(text)
+
+        if not matches and not pathfs_matches:
             no_objects_files.append(str(xml_file.relative_to(PANELS_DIR)))
             continue
 
         # Собираем пути объектов для копирования
         for match in matches:
             # match — это то, что после objects/, например PV/object/AI/AI.xml
-            # Берём путь до папки объекта (без имени файла) для копирования
             obj_rel_path = match  # например PV/object/AI/AI.xml
             objects_to_copy.add(obj_rel_path)
 
-        # Заменяем в тексте
+        # pathFS пути — добавляем .xml для копирования
+        for match in pathfs_matches:
+            obj_rel_path = match + ".xml"  # PV/FPs/heatControl_SHD_03_1_P6 → + .xml
+            objects_to_copy.add(obj_rel_path)
+
+        # Заменяем в тексте: стандартные пути с .xml
         new_text = PATTERN.sub(lambda m: f"objects/objects_{cabinet_name}/{m.group(1)}", text)
+        # Заменяем pathFS: /objects/... → /objects/objects_<ШКАФ>/...
+        new_text = PATTERN_PATHFS.sub(lambda m: f"/objects/objects_{cabinet_name}/{m.group(1)}", new_text)
 
         if new_text != text:
             # Сохраняем оригинал в Modules/old_mnemo/<ШКАФ>/

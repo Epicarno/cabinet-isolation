@@ -19,7 +19,7 @@ import os
 import sys
 from pathlib import Path
 from report_utils import write_report
-from parse_utils import read_text_safe, find_cabinet_dirs, OBJECTS_DIR, LCSMEMO_DIR, REPORT_DIR
+from parse_utils import read_text_safe, strip_comments, find_cabinet_dirs, OBJECTS_DIR, LCSMEMO_DIR, REPORT_DIR
 
 # Windows cp866/cp1251 ломает Unicode → форсируем UTF-8
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -31,6 +31,8 @@ REPORT_FILE = REPORT_DIR / "orphan_files_report.txt"
 PATTERN_FULL = re.compile(r'objects/objects_[^/]+/(.*?\.xml)')
 # Ссылки вида objects/...xml (старый формат, если остались)
 PATTERN_OLD = re.compile(r'objects/(?!objects_)(.*?\.xml)')
+# pathFS без .xml: /objects/objects_<ШКАФ>/PV/FPs/heatControl_SHD_03_1_P6
+PATTERN_PATHFS = re.compile(r'/objects/objects_[^/]+/([^"<>\s]+?)(?=</prop>|")')
 
 
 def collect_referenced_files(cabinet_name: str, cabinet_obj_dir: Path) -> set[str]:
@@ -49,6 +51,9 @@ def collect_referenced_files(cabinet_name: str, cabinet_obj_dir: Path) -> set[st
             if text is None:
                 continue
 
+            # Убираем комментарии — закомментированные ссылки не считаются
+            text = strip_comments(text)
+
             # Ищем ссылки на objects/objects_<ЭТОТ_ШКАФ>/...
             for m in PATTERN_FULL.finditer(text):
                 full_match = m.group(0)
@@ -58,6 +63,10 @@ def collect_referenced_files(cabinet_name: str, cabinet_obj_dir: Path) -> set[st
             # На случай если остались старые ссылки
             for m in PATTERN_OLD.finditer(text):
                 referenced.add(m.group(1))
+
+            # pathFS без .xml — добавляем .xml
+            for m in PATTERN_PATHFS.finditer(text):
+                referenced.add(m.group(1) + ".xml")
 
     # 2. Ссылки из самих объектов шкафа (перекрёстные)
     #    Итеративно — объект A ссылается на B, B на C и т.д.
@@ -77,6 +86,9 @@ def collect_referenced_files(cabinet_name: str, cabinet_obj_dir: Path) -> set[st
             if text is None:
                 continue
 
+            # Убираем комментарии
+            text = strip_comments(text)
+
             for m in PATTERN_FULL.finditer(text):
                 full_match = m.group(0)
                 if f"objects/{obj_prefix}/" in full_match:
@@ -84,6 +96,10 @@ def collect_referenced_files(cabinet_name: str, cabinet_obj_dir: Path) -> set[st
 
             for m in PATTERN_OLD.finditer(text):
                 referenced.add(m.group(1))
+
+            # pathFS без .xml — добавляем .xml
+            for m in PATTERN_PATHFS.finditer(text):
+                referenced.add(m.group(1) + ".xml")
 
     return referenced
 
