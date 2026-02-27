@@ -34,14 +34,44 @@ Modules/
 │   ├── cabinets.txt                ← список шкафов для обработки (фильтр)
 │   ├── parse_utils.py              ← общие утилиты и пути проекта
 │   ├── report_utils.py             ← запись отчётов (--append режим)
-│   ├── run_pipeline.py              ← раннер пайплайна (основной)
-│   ├── run_pipeline.bat            ← обёртка для запуска из CMD
-│   ├── collect_output.py           ← сборка деплой-папок
-│   ├── *.py                        ← скрипты пайплайна (см. ниже)
-│   └── dp_scripts/                 ← работа с DPL-файлами (валидация, очистка)
-│       ├── validate_structs.py     ← CSV struct ↔ DPL DpType
-│       ├── validate_dpl_points.py  ← DPL ↔ мнемо ↔ CNS
-│       └── clean_dpl.py            ← удаление DP из DPL
+│   │
+│   ├── isolation/                  ← Пайплайн изоляции шкафов
+│   │   ├── run_pipeline.py         ← раннер пайплайна
+│   │   ├── run_pipeline.bat        ← обёртка для CMD
+│   │   ├── process_mnemo.py        ← шаг 1: копирование объектов
+│   │   ├── fix_cross_refs.py       ← шаг 2: перекрёстные ссылки
+│   │   ├── cleanup_orphans.py      ← шаг 3: удаление сирот
+│   │   ├── clean_commented_refs.py ← шаг 4: закомментированные ссылки
+│   │   ├── validate_refs.py        ← шаг 5: валидация ссылок
+│   │   ├── split_ctl.py            ← шаг 6: разбиение .ctl
+│   │   ├── replace_scripts.py      ← шаг 7: замена #uses
+│   │   ├── scan_problems.py        ← шаг 8: анализ проблем
+│   │   ├── check_other_scripts.py  ← шаг 9: чужие скрипты → JSON
+│   │   ├── cleanup_classes.py      ← шаг 10: удаление if-блоков
+│   │   └── collect_output.py       ← шаг 11: сборка output/
+│   │
+│   ├── rename/                     ← Пайплайн переименования KKS
+│   │   ├── rename_pipeline.bat     ← раннер пайплайна
+│   │   ├── rename_kks.py           ← переименование точек (XML + CSV)
+│   │   ├── fix_dp_indices.py       ← исправление dpNameEdit индексов
+│   │   ├── scan_dpNameEdit_concat.py ← диагностика конкатенаций
+│   │   ├── make_kks_xlsx.py        ← генерация Excel-таблиц KKS
+│   │   ├── read_kks.py             ← чтение правил KKS
+│   │   ├── read_kks_full.py        ← полное чтение KKS
+│   │   ├── read_list5.py           ← чтение LIST5 из .xlsm
+│   │   ├── read_ti_ts.py           ← чтение ТИ/ТС
+│   │   └── dp_scripts/             ← работа с DPL-файлами
+│   │       ├── rename_dpl.py       ← переименование в DPL
+│   │       ├── validate_dpl_points.py ← валидация DPL
+│   │       ├── validate_structs.py ← CSV struct ↔ DPL DpType
+│   │       └── clean_dpl.py        ← очистка DPL
+│   │
+│   ├── extract_datapoints.py       ← извлечение точек из XML
+│   ├── classify_datapoints.py      ← классификация точек по DPT
+│   ├── full_audit.py               ← аудит XML
+│   ├── check_line_endings.py       ← проверка переводов строк
+│   ├── fix_line_endings.py         ← конвертация CRLF → LF (.ctl)
+│   └── fix_xml_line_endings.py     ← конвертация CRLF → LF (XML)
 │
 ├── DPLs/                           ← DPL-файлы (Datapoint List)
 │   ├── SHD_03_1/
@@ -119,12 +149,14 @@ SHD_05_1
 
 ```bash
 # Через bat-обёртку (для CMD):
+cd scripts/isolation
 run_pipeline.bat                    # полный запуск
 run_pipeline.bat --append           # дописывать в существующие отчёты
 run_pipeline.bat --from 5           # продолжить с шага 5
 run_pipeline.bat --only 10          # запустить только шаг 10
 
 # Напрямую через Python (рекомендуется):
+cd scripts/isolation
 python run_pipeline.py              # полный запуск
 python run_pipeline.py --from 5     # продолжить с шага 5
 python run_pipeline.py --only 8     # только шаг 8
@@ -190,6 +222,8 @@ rename_pipeline.bat --only 2           # только шаг 2
 rename_pipeline.bat --apply --from 3   # применить, начиная с шага 3
 ```
 
+Запускать из папки `scripts/rename/`.
+
 | Шаг | Скрипт | Фаза | Описание |
 |-----|--------|------|----------|
 | 1 | `rename_kks.py` | Переименование | Переименовывает точки в XML: мнемосхемы (`LCSMnemo/*/`) + объекты (`objects_*/`) + output. Ищет атрибуты `Name="..."` в `<reference>`, применяет правила из Excel |
@@ -240,6 +274,7 @@ string dpNameT1 = dpNameEdit[1] + ">" + dpNameEdit[2] + ">" + dpNameEdit[3] + ">
 Найденные суффиксы: T1, T4, H1, TE1, KZ1. Масштаб: ~190 мест в ~179 файлах.
 
 ```bash
+cd scripts/rename
 python fix_dp_indices.py                 # dry-run (только отчёт)
 python fix_dp_indices.py --apply         # применить исправления
 python fix_dp_indices.py SHD_03_1        # только один шкаф
@@ -299,6 +334,7 @@ python classify_datapoints.py SHD_12     # один шкаф
 - `FIRE`, `DIAG`, `RSRV_*` — пожар, диагностика, резервы
 
 ```bash
+cd scripts/rename
 python rename_kks.py                     # dry-run по всем шкафам
 python rename_kks.py --apply             # применить замены
 python rename_kks.py --dry-run SHD_12    # только шкаф SHD_12
@@ -308,7 +344,7 @@ python rename_kks.py --dry-run SHD_12    # только шкаф SHD_12
 
 ## Скрипты DPL (`dp_scripts/`)
 
-Инструменты для работы с DPL-файлами (Datapoint List) WinCC OA. Запускаются из папки `scripts/dp_scripts/`.
+Инструменты для работы с DPL-файлами (Datapoint List) WinCC OA. Запускаются из папки `scripts/rename/dp_scripts/`.
 
 Данные: DPL-файлы в `DPLs/<ШКАФ>/`, CSV-описания мнемосхем в `LCSMnemo/<ШКАФ>/`.
 
@@ -317,7 +353,7 @@ python rename_kks.py --dry-run SHD_12    # только шкаф SHD_12
 Сравнивает значения колонки `struct` из CSV с типами в секции `# DpType` DPL-файлов. Выявляет несовпадения, классифицирует как ERROR/WARN/INFO.
 
 ```bash
-cd dp_scripts
+cd scripts/rename/dp_scripts
 python validate_structs.py SHD_03_1
 ```
 
@@ -329,7 +365,7 @@ python validate_structs.py SHD_03_1
 4. **_Static** — проверка что _Static-точки из CSV присутствуют в DPL
 
 ```bash
-cd dp_scripts
+cd scripts/rename/dp_scripts
 python validate_dpl_points.py SHD_03_1
 ```
 
@@ -344,7 +380,7 @@ Distribution, Periph, CNS, DbArchiveInfo и др.) по тем же правил
 Импортирует `load_excel` и `transform_dp` из `rename_kks.py` — один источник правил.
 
 ```bash
-cd dp_scripts
+cd scripts/rename/dp_scripts
 python rename_dpl.py                     # dry-run все шкафы
 python rename_dpl.py --apply             # применить
 python rename_dpl.py SHD_03_1            # один шкаф
@@ -356,7 +392,7 @@ python rename_dpl.py SHD_03_1            # один шкаф
 Автобэкап в `DPLs/<шкаф>/backup/`.
 
 ```bash
-cd dp_scripts
+cd scripts/rename/dp_scripts
 python clean_dpl.py SHD_03_1 --remove "SHD_03_1>ITP2>AI>P3" --dry-run
 python clean_dpl.py SHD_03_1 --clean-cns-orphans --dry-run
 python clean_dpl.py SHD_03_1 --remove-unused-types --dry-run

@@ -37,9 +37,9 @@ sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 # ---------------------------------------------------------------------------
 # Пути
 # ---------------------------------------------------------------------------
-SCRIPT_DIR  = Path(__file__).resolve().parent       # dp_scripts/
-SCRIPTS_DIR = SCRIPT_DIR.parent                      # scripts/
-MODULES_DIR = SCRIPTS_DIR.parent                     # Modules/
+SCRIPT_DIR  = Path(__file__).resolve().parent       # rename/dp_scripts/
+SCRIPTS_DIR = SCRIPT_DIR.parent                      # rename/
+MODULES_DIR = SCRIPTS_DIR.parent.parent              # Modules/
 DPL_DIR     = MODULES_DIR / "DPLs"
 REPORT_DIR  = MODULES_DIR / "reports"
 

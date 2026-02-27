@@ -110,7 +110,7 @@ def _normalize_cab(cab: str) -> str:
 
 
 _build_physical_index()
-MODULES_DIR = SCRIPT_DIR.parent
+MODULES_DIR = SCRIPT_DIR.parent.parent    # Modules/
 EXCEL_FILE  = MODULES_DIR / "Применение KKS - ОП СПб.xlsx"
 REPORT_DIR  = MODULES_DIR / "reports"
 MNEMO_DIR   = MODULES_DIR / "ventcontent" / "panels" / "vision" / "LCSMnemo"

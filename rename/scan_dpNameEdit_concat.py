@@ -7,7 +7,7 @@ import os
 import re
 from collections import defaultdict
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # Modules/
 OUT_FILE = os.path.join(ROOT, "reports", "dpNameEdit_concat_scan.txt")
 
 def w(text=""):

@@ -34,8 +34,8 @@ from collections import defaultdict
 
 # ---------------------------------------------------------------------------
 SCRIPT_DIR  = Path(__file__).resolve().parent
-SCRIPTS_DIR = SCRIPT_DIR.parent          # scripts/
-MODULES_DIR = SCRIPTS_DIR.parent          # Modules/
+SCRIPTS_DIR = SCRIPT_DIR.parent          # rename/
+MODULES_DIR = SCRIPTS_DIR.parent.parent   # Modules/
 MNEMO_DIR   = MODULES_DIR / "ventcontent" / "panels" / "vision" / "LCSMnemo"
 DPL_DIR     = MODULES_DIR / "DPLs"
 REPORT_DIR  = MODULES_DIR / "reports" / "datapoints"

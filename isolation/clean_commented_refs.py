@@ -46,6 +46,8 @@ OBJECTS_DIR = VENT_DIR / "panels" / "objects"
 MNEMO_DIR   = VENT_DIR / "panels" / "vision" / "LCSMnemo"
 
 sys.path.insert(0, str(SCRIPT_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from parse_utils import read_text_safe, load_active_cabinets
 
 # Паттерн ссылки на XML-файл внутри objects_<ШКАФ>/

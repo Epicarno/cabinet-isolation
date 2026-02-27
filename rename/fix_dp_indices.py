@@ -40,7 +40,7 @@ from collections import defaultdict
 sys.stdout.reconfigure(encoding='utf-8')
 
 SCRIPT_DIR  = Path(__file__).resolve().parent
-MODULES_DIR = SCRIPT_DIR.parent
+MODULES_DIR = SCRIPT_DIR.parent.parent    # Modules/
 REPORT_DIR  = MODULES_DIR / "reports"
 
 # ---------------------------------------------------------------------------

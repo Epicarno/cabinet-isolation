@@ -11,6 +11,8 @@ import re
 import sys
 import csv
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from report_utils import write_report
 from parse_utils import read_text_safe, find_mnemo_dirs, LCSMEMO_DIR, CTL_DIR, REPORT_DIR
 

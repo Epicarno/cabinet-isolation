@@ -41,8 +41,8 @@ from datetime import datetime
 
 # ---------------------------------------------------------------------------
 SCRIPT_DIR  = Path(__file__).resolve().parent
-SCRIPTS_DIR = SCRIPT_DIR.parent          # scripts/
-MODULES_DIR = SCRIPTS_DIR.parent          # Modules/
+SCRIPTS_DIR = SCRIPT_DIR.parent          # rename/
+MODULES_DIR = SCRIPTS_DIR.parent.parent   # Modules/
 DPL_DIR     = MODULES_DIR / "DPLs"
 
 
