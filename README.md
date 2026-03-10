@@ -1,7 +1,5 @@
 # Изоляция шкафов
 
-Автоматизированный пайплайн разделения монолитного скрипта вентиляции на изолированные модули по шкафам автоматики.
-
 ## Структура проекта
 
 ```
@@ -25,13 +23,6 @@ Modules/
 │   │   ├── check_other_scripts.py  ← шаг 9: чужие скрипты → JSON
 │   │   ├── cleanup_classes.py      ← шаг 10: удаление if-блоков
 │   │   └── collect_output.py       ← шаг 11: сборка output/
-│   │
-│   ├── extract_datapoints.py       ← извлечение точек из XML
-│   ├── classify_datapoints.py      ← классификация точек по DPT
-│   ├── full_audit.py               ← аудит XML
-│   ├── check_line_endings.py       ← проверка переводов строк
-│   ├── fix_line_endings.py         ← конвертация CRLF → LF (.ctl)
-│   └── fix_xml_line_endings.py     ← конвертация CRLF → LF (XML)
 │
 ├── ventcontent/                    ← проект WinCC OA
 │   ├── panels/
@@ -67,13 +58,7 @@ Modules/
 │
 ├── reports/                        ← отчёты (генерируются автоматически)
 │   ├── split_ctl_report.txt
-│   ├── other_scripts.json          ← JSON обмен между скриптами
-│   └── datapoints/                 ← отчёты по точкам данных
-│       ├── _all.txt                ← все точки всех шкафов
-│       ├── SHD_03_1.txt            ← точки одного шкафа
-│       ├── _classes.txt            ← DP | DPT-класс | описание
-│       ├── _classes_unique.txt     ← уникальные DPT-классы + счётчик
-│       └── _unmatched.txt          ← точки без класса (если есть)
+│   └── other_scripts.json          ← JSON обмен между скриптами
 ```
 
 ## Пайплайн (11 шагов)
@@ -90,8 +75,6 @@ SHD_05_1
 ```
 
 Если файл пустой, все строки закомментированы или файл отсутствует — обрабатываются **все** шкафы.
-
-Шкафы полностью независимы друг от друга — перекрёстных зависимостей нет.
 
 ### Запуск
 
@@ -112,8 +95,6 @@ python run_pipeline.py --from 5     # продолжить с шага 5
 python run_pipeline.py --only 8     # только шаг 8
 ```
 
-> **Кодировка**: все скрипты пайплайна устанавливают `sys.stdout.reconfigure(encoding='utf-8')` при запуске. Раннер дополнительно передаёт `PYTHONIOENCODING=utf-8` в subprocess. Это гарантирует корректный вывод на Windows-консолях (cp866/cp1251) без `UnicodeEncodeError`.
-
 ### Шаги
 
 | # | Скрипт | Фаза | Описание |
@@ -129,14 +110,3 @@ python run_pipeline.py --only 8     # только шаг 8
 | 9 | `check_other_scripts.py` | 📊 Анализ | Для каждого XML находит `#uses` → загружает классы из сторонних скриптов. Если struct-класс не из Ventcontent, но есть в другом скрипте — помечает как защищённый. Сохраняет `reports/other_scripts.json` |
 | 10 | `cleanup_classes.py` | 🔧 Очистка | Загружает `other_scripts.json`, объединяет защищённые классы с доступными из `Ventcontent_<ШКАФ>.ctl`. Удаляет if-блоки для классов, которых нет ни там, ни там |
 | 11 | `collect_output.py` | 📦 Сборка | Собирает результаты в `output/<ШКАФ>/ventcontent/...` — готовые папки с полной структурой путей для деплоя на целевую машину |
-
-### Связь между шагами
-
-```
-Шаг 9: check_other_scripts.py
-    ↓ записывает
-  reports/other_scripts.json
-    ↓ читает
-Шаг 10: cleanup_classes.py
-    → НЕ удаляет if-блоки для защищённых классов
-```
