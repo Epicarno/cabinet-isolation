@@ -50,36 +50,12 @@ Modules/
 │   │   ├── cleanup_classes.py      ← шаг 10: удаление if-блоков
 │   │   └── collect_output.py       ← шаг 11: сборка output/
 │   │
-│   ├── rename/                     ← Пайплайн переименования KKS
-│   │   ├── rename_pipeline.bat     ← раннер пайплайна
-│   │   ├── rename_kks.py           ← переименование точек (XML + CSV)
-│   │   ├── fix_dp_indices.py       ← исправление dpNameEdit индексов
-│   │   ├── scan_dpNameEdit_concat.py ← диагностика конкатенаций
-│   │   ├── make_kks_xlsx.py        ← генерация Excel-таблиц KKS
-│   │   ├── read_kks.py             ← чтение правил KKS
-│   │   ├── read_kks_full.py        ← полное чтение KKS
-│   │   ├── read_list5.py           ← чтение LIST5 из .xlsm
-│   │   ├── read_ti_ts.py           ← чтение ТИ/ТС
-│   │   └── dp_scripts/             ← работа с DPL-файлами
-│   │       ├── rename_dpl.py       ← переименование в DPL
-│   │       ├── validate_dpl_points.py ← валидация DPL
-│   │       ├── validate_structs.py ← CSV struct ↔ DPL DpType
-│   │       └── clean_dpl.py        ← очистка DPL
-│   │
 │   ├── extract_datapoints.py       ← извлечение точек из XML
 │   ├── classify_datapoints.py      ← классификация точек по DPT
 │   ├── full_audit.py               ← аудит XML
 │   ├── check_line_endings.py       ← проверка переводов строк
 │   ├── fix_line_endings.py         ← конвертация CRLF → LF (.ctl)
 │   └── fix_xml_line_endings.py     ← конвертация CRLF → LF (XML)
-│
-├── DPLs/                           ← DPL-файлы (Datapoint List)
-│   ├── SHD_03_1/
-│   │   ├── other.dpl            ← основные точки
-│   │   ├── di_and_oip.dpl      ← физические (DI/OIP)
-│   │   ├── cns.dpl             ← CNS-дерево
-│   │   └── backup/             ← бэкапы (clean_dpl.py)
-│   └── ...
 │
 ├── ventcontent/                    ← проект WinCC OA
 │   ├── panels/
@@ -122,8 +98,6 @@ Modules/
 │       ├── _classes.txt            ← DP | DPT-класс | описание
 │       ├── _classes_unique.txt     ← уникальные DPT-классы + счётчик
 │       └── _unmatched.txt          ← точки без класса (если есть)
-│
-└── Применение KKS - ОП СПб.xlsx   ← правила переименования KKS (вход для rename_kks.py)
 ```
 
 ## Пайплайн (11 шагов)
@@ -191,106 +165,6 @@ python run_pipeline.py --only 8     # только шаг 8
     → НЕ удаляет if-блоки для защищённых классов
 ```
 
-## Пайплайн переименования KKS (`rename_pipeline.bat`)
-
-Второй пайплайн — переименование точек данных (datapoints) по стандарту KKS.
-Запускается **после** изоляции или независимо.
-
-### Что делает
-
-Переименовывает точки данных везде: в XML мнемосхемах, объектах, CSV-файлах и DPL-файлах.
-
-**До переименования:** `SHD_03_1>P3_V3>DI>KZ1` (3 уровня)
-**После:** `B3>SHD_03_1>P3_V3>DI>KZ1` (4 уровня, добавлен блок)
-
-### Типы преобразований
-
-| Тип | Описание | Пример |
-|-----|----------|--------|
-| **PREFIX** | Добавляет блок-префикс | `SHD_03_1>P3_V3>DI>KZ1` → `B3>SHD_03_1>P3_V3>DI>KZ1` |
-| **PHYSICAL** | Физические точки StSign/OIP → подсистема | `SHUOD_03_1_StSign_3` → `B3>SHUOD_03_1>D109>DI>StSign_3` |
-| **RESTRUCTURED** | Исключения из Excel (перестройка сегментов) | из таблицы напрямую |
-| **FLAT** | Точки без `>` | `SHD_7_A1_2` → `B7>SHD_7_A1_2` |
-
-### Шаги пайплайна
-
-```
-rename_pipeline.bat                    # dry-run (отчёт)
-rename_pipeline.bat --apply            # применить изменения
-rename_pipeline.bat --from 3           # начать с шага 3
-rename_pipeline.bat --only 2           # только шаг 2
-rename_pipeline.bat --apply --from 3   # применить, начиная с шага 3
-```
-
-Запускать из папки `scripts/rename/`.
-
-| Шаг | Скрипт | Фаза | Описание |
-|-----|--------|------|----------|
-| 1 | `rename_kks.py` | Переименование | Переименовывает точки в XML: мнемосхемы (`LCSMnemo/*/`) + объекты (`objects_*/`) + output. Ищет атрибуты `Name="..."` в `<reference>`, применяет правила из Excel |
-| 2 | `rename_kks.py --csv` | Переименование | Переименовывает точки в CSV-файлах мнемосхем (колонки `refName` и `dpName`). CSV используются для split_ctl и валидации — без этого шага DPL-проверки дадут ложные ошибки |
-| 3 | `dp_scripts/rename_dpl.py` | Переименование | Переименовывает точки во всех секциях DPL: Datapoint, DpValue, Aliases, Distribution, Periph, CNS и др. Использует те же правила из Excel |
-| 4 | `dp_scripts/validate_dpl_points.py` | ✅ Валидация | Четыре проверки после переименования: DPL↔мнемо, CSV struct↔DPL type, CNS↔DPL, _Static |
-| 5 | `dp_scripts/clean_dpl.py` | 🔧 Очистка | Удаляет CNS-сироты и неиспользуемые типы из DPL после переименования |
-
-### Связь между шагами
-
-```
-Шаг 1: rename_kks.py       → XML мнемосхемы + объекты
-Шаг 2: rename_kks.py --csv → CSV мнемосхемы
-Шаг 3: rename_dpl.py       → DPL файлы
-    ↓ все точки переименованы
-Шаг 4: validate_dpl_points.py → проверка согласованности
-Шаг 5: clean_dpl.py           → финальная очистка
-```
-
-### ⚠ dpNameEdit индексы (fix_dp_indices.py)
-
-После переименования глубина пути точки увеличивается. Скрипты объектов, которые парсят
-путь через `dpName.split(">")` с **жёстко заданными индексами**, ломаются:
-
-```
-// До переименования: dpName = "SHD_03_1>P1_V1>AI>T0"
-dyn_string dpNameEdit = dpName.split(">");
-// dpNameEdit[1] = "SHD_03_1", [2] = "P1_V1", [3] = "AI"
-
-// После переименования: dpName = "B3>SHD_03_1>P1_V1>AI>T0"
-// dpNameEdit[1] = "B3", [2] = "SHD_03_1", [3] = "P1_V1" — ВСЕ СДВИНУЛОСЬ!
-```
-
-Типичный паттерн конкатенации (до и после исправления):
-
-```
-// До:
-string dpNameT1 = dpNameEdit[1] + ">" + dpNameEdit[2] + ">" + dpNameEdit[3] + ">" + "T1";
-// После (добавлен dpNameEdit[4]):
-string dpNameT1 = dpNameEdit[1] + ">" + dpNameEdit[2] + ">" + dpNameEdit[3] + ">" + dpNameEdit[4] + ">" + "T1";
-```
-
-**Решение**: скрипт `fix_dp_indices.py` автоматически находит и исправляет эти паттерны.
-Обрабатывает обе формы экранирования кавычек в XML:
-- `\">\"` (внутри CDATA/скриптов)
-- `&quot;&gt;&quot;` (в атрибутах)
-
-Найденные суффиксы: T1, T4, H1, TE1, KZ1. Масштаб: ~190 мест в ~179 файлах.
-
-```bash
-cd scripts/rename
-python fix_dp_indices.py                 # dry-run (только отчёт)
-python fix_dp_indices.py --apply         # применить исправления
-python fix_dp_indices.py SHD_03_1        # только один шкаф
-```
-
-Диагностический скрипт `scan_dpNameEdit_concat.py` — полное сканирование всех файлов
-на паттерн `dpNameEdit[1]+">"+dpNameEdit[2]+">"+dpNameEdit[3]`. Группирует по шаблонам,
-извлекает суффиксы. Результат: `reports/dpNameEdit_concat_scan.txt`.
-
-### Источники правил
-
-- Таблица соответствия «шкаф → блок» (лист 2)
-- Явные маппинги-исключения (лист 1, колонки B→C)
-- Словарь `PHYSICAL_GROUPS` в `rename_kks.py` для StSign/OIP точек
-- `cabinets.txt` — фильтр шкафов (используется теми же скриптами)
-
 ## Автономные скрипты
 
 Скрипты, не входящие в основной пайплайн. Запускаются отдельно.
@@ -317,88 +191,6 @@ python classify_datapoints.py SHD_12     # один шкаф
 ```
 
 Результат: `reports/datapoints/_classes.txt` (полный список), `_classes_unique.txt` (уникальные классы), `_unmatched.txt` (без класса).
-
-### `rename_kks.py` — Переименование точек по стандарту KKS
-
-Переименовывает datapoint-ы в XML-мнемосхемах и объектах по новому стандарту именования KKS. Правила читаются из Excel-файла с таблицей соответствия «шкаф → блок» и списком исключений.
-
-Три типа преобразований:
-- **PREFIX** (основной) — добавляет блок-префикс: `SHD_03_1>P3_V3>DI>KZ1` → `B3>SHD_03_1>P3_V3>DI>KZ1`
-- **PHYSICAL** (физические точки) — StSign/OIP точки раскладываются по подсистемам: `SHUOD_03_1_StSign_3` → `B3>SHUOD_03_1>D109>DI>StSign_3`
-- **RESTRUCTURED** (исключения) — перестройка сегментов помимо префикса, берётся напрямую из таблицы
-- **FLAT** — точки без `>`: `SHD_7_A1_2` → `B7>SHD_7_A1_2`
-
-Подсистемы физических точек (SHUOD_03_1, SHKZIAV_03_1):
-- `D109`, `D119`, `D120`, `D121`, `D121A` — двери/помещения (ШУОД)
-- `GAS`, `ALRT_ST`, `ALRT_R106`, `EVENT` — газ, оповещение, вентиляция (ШКЗиАВ)
-- `FIRE`, `DIAG`, `RSRV_*` — пожар, диагностика, резервы
-
-```bash
-cd scripts/rename
-python rename_kks.py                     # dry-run по всем шкафам
-python rename_kks.py --apply             # применить замены
-python rename_kks.py --dry-run SHD_12    # только шкаф SHD_12
-```
-
-**Внимание**: `--dry-run` включён по умолчанию. Для реального изменения файлов нужен `--apply`.
-
-## Скрипты DPL (`dp_scripts/`)
-
-Инструменты для работы с DPL-файлами (Datapoint List) WinCC OA. Запускаются из папки `scripts/rename/dp_scripts/`.
-
-Данные: DPL-файлы в `DPLs/<ШКАФ>/`, CSV-описания мнемосхем в `LCSMnemo/<ШКАФ>/`.
-
-### `validate_structs.py` — CSV struct ↔ DPL DpType
-
-Сравнивает значения колонки `struct` из CSV с типами в секции `# DpType` DPL-файлов. Выявляет несовпадения, классифицирует как ERROR/WARN/INFO.
-
-```bash
-cd scripts/rename/dp_scripts
-python validate_structs.py SHD_03_1
-```
-
-### `validate_dpl_points.py` — 4 проверки DPL
-
-1. **DPL ↔ мнемо** — какие точки есть в DPL, но нет на мнемосхемах (и наоборот)
-2. **CSV struct ↔ DPL instance type** — тип в CSV совпадает с типом экземпляра в DPL
-3. **CNS ↔ DPL** — ссылки в CNS секции на несуществующие DP
-4. **_Static** — проверка что _Static-точки из CSV присутствуют в DPL
-
-```bash
-cd scripts/rename/dp_scripts
-python validate_dpl_points.py SHD_03_1
-```
-
-Результат: 4 отчёта в `reports/` — `*_dpl_vs_mnemo.txt`, `*_dpl_vs_csv_types.txt`, `*_cns_orphans.txt`, `*_static_analysis.txt`.
-
-### `rename_dpl.py` — Переименование точек в DPL
-
-Переименовывает DP-имена во всех секциях DPL (Datapoint, Aliases, DpValue, AlertValue,
-Distribution, Periph, CNS, DbArchiveInfo и др.) по тем же правилам из Excel, что и `rename_kks.py`.
-Автобэкап оригиналов в `DPLs/<шкаф>/backup/`.
-
-Импортирует `load_excel` и `transform_dp` из `rename_kks.py` — один источник правил.
-
-```bash
-cd scripts/rename/dp_scripts
-python rename_dpl.py                     # dry-run все шкафы
-python rename_dpl.py --apply             # применить
-python rename_dpl.py SHD_03_1            # один шкаф
-```
-
-### `clean_dpl.py` — Очистка DPL-файлов
-
-Удаляет экземпляры DP из всех секций DPL (Datapoint, Aliases, DpValue, Distribution, Periph, CNS и др.).
-Автобэкап в `DPLs/<шкаф>/backup/`.
-
-```bash
-cd scripts/rename/dp_scripts
-python clean_dpl.py SHD_03_1 --remove "SHD_03_1>ITP2>AI>P3" --dry-run
-python clean_dpl.py SHD_03_1 --clean-cns-orphans --dry-run
-python clean_dpl.py SHD_03_1 --remove-unused-types --dry-run
-```
-
-**`--dry-run`** — по умолчанию. Без него — реальное удаление с бэкапом.
 
 ## Общие модули
 
