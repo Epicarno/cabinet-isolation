@@ -62,9 +62,10 @@ def build_reverse_map() -> dict[str, set[str]]:
                     reverse[ref_path] = set()
                 reverse[ref_path].add(file_rel)
 
-            # pathFS без .xml — добавляем .xml для проверки существования
+            # pathFS — может быть с .xml или без; нормализуем
             for match in PATTERN_PATHFS.finditer(clean_text):
-                ref_path = match.group(1) + ".xml"
+                raw = match.group(1)
+                ref_path = raw if raw.endswith(".xml") else raw + ".xml"
                 if ref_path not in reverse:
                     reverse[ref_path] = set()
                 reverse[ref_path].add(file_rel)
@@ -77,10 +78,18 @@ def main():
     reverse_map = build_reverse_map()
 
     # Находим недостающие файлы
+    # WinCC OA резолвит пути и с .xml, и без → проверяем оба варианта
     missing: dict[str, set[str]] = {}
     for ref_path, sources in reverse_map.items():
         full_path = PANELS_DIR / ref_path
-        if not full_path.exists():
+        if full_path.exists():
+            continue
+        # Альтернативный путь: без .xml / с .xml
+        if ref_path.endswith(".xml"):
+            alt_path = PANELS_DIR / ref_path[:-4]
+        else:
+            alt_path = PANELS_DIR / (ref_path + ".xml")
+        if not alt_path.exists():
             missing[ref_path] = sources
 
     # Отчёт
