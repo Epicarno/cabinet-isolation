@@ -14,7 +14,10 @@ import shutil
 from pathlib import Path
 
 from report_utils import write_report
-from parse_utils import read_text_safe, find_mnemo_dirs, PANELS_DIR, OBJECTS_DIR, LCSMEMO_DIR, REPORT_DIR, OLD_MNEMO_DIR
+from parse_utils import (
+    read_text_safe, strip_comments, find_mnemo_dirs,
+    PANELS_DIR, OBJECTS_DIR, LCSMEMO_DIR, REPORT_DIR, OLD_MNEMO_DIR,
+)
 
 # Windows cp866/cp1251 ломает Unicode → форсируем UTF-8
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -86,18 +89,58 @@ def process_cabinet(cabinet_path: Path, no_objects_files: list[str]):
             xml_file.write_text(new_text, encoding="utf-8")
             print(f"  [✓] Обновлён: {xml_file.name}")
 
-    # Копируем объекты — только конкретные файлы (не всю папку!)
-    for obj_rel in objects_to_copy:
-        src = OBJECTS_DIR / obj_rel
-        dst = OBJECTS_DIR / f"objects_{cabinet_name}" / obj_rel
+    # --- Копируем объекты и итеративно дособираем перекрёстные ссылки ---
+    cabinet_obj_dir = OBJECTS_DIR / f"objects_{cabinet_name}"
+    copied: set[str] = set()          # уже скопированные
+    to_scan: set[str] = set(objects_to_copy)  # очередь на сканирование
 
-        if src.exists():
-            if not dst.exists():
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dst)
-                print(f"  [→] Скопирован: {obj_rel}")
-        else:
-            print(f"  [?] Источник не найден: {src}")
+    iteration = 0
+    while to_scan:
+        iteration += 1
+        if iteration > 50:
+            print(f"  [!] Прервано: >50 итераций перекрёстных ссылок")
+            break
+
+        # Копируем все файлы из текущей очереди
+        newly_copied: list[Path] = []
+        for obj_rel in sorted(to_scan):
+            if obj_rel in copied:
+                continue
+            copied.add(obj_rel)
+
+            src = OBJECTS_DIR / obj_rel
+            dst = cabinet_obj_dir / obj_rel
+
+            if src.exists():
+                if not dst.exists():
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dst)
+                    print(f"  [→] Скопирован: {obj_rel}")
+                newly_copied.append(dst)
+            else:
+                print(f"  [?] Источник не найден: {src}")
+
+        # Сканируем только что скопированные объекты на перекрёстные ссылки
+        to_scan = set()
+        for dst_file in newly_copied:
+            text = read_text_safe(dst_file)
+            if text is None:
+                continue
+            clean = strip_comments(text)
+
+            for m in PATTERN.finditer(clean):
+                ref = m.group(1)
+                if ref not in copied:
+                    to_scan.add(ref)
+
+            for m in PATTERN_PATHFS.finditer(clean):
+                raw = m.group(1)
+                ref = raw if raw.endswith(".xml") else raw + ".xml"
+                if ref not in copied:
+                    to_scan.add(ref)
+
+        if to_scan:
+            print(f"  [↻] Найдено перекрёстных ссылок: {len(to_scan)} (итерация {iteration})")
 
 
 def main():
