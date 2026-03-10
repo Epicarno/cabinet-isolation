@@ -8,4 +8,4 @@ REM  run_pipeline.bat --from 5           - начать с шага 5
 REM  run_pipeline.bat --only 8           - только шаг 8
 
 cd /d "%~dp0"
-python run_pipeline.py %*
+python isolation\run_pipeline.py %*

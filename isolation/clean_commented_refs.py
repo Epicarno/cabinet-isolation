@@ -38,15 +38,12 @@ sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 SCRIPT_DIR  = Path(__file__).resolve().parent
-MODULES_DIR = SCRIPT_DIR.parent
+MODULES_DIR = SCRIPT_DIR.parent.parent
 REPORT_DIR  = MODULES_DIR / "reports"
 
 VENT_DIR   = MODULES_DIR / "ventcontent"
 OBJECTS_DIR = VENT_DIR / "panels" / "objects"
 MNEMO_DIR   = VENT_DIR / "panels" / "vision" / "LCSMnemo"
-
-sys.path.insert(0, str(SCRIPT_DIR))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from parse_utils import read_text_safe, load_active_cabinets
 

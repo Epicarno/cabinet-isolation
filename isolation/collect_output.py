@@ -25,7 +25,6 @@
 import sys
 import shutil
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from parse_utils import (
     find_cabinet_dirs, SCRIPT_DIR, VENT_DIR,

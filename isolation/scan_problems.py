@@ -12,7 +12,6 @@
 import re
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from report_utils import write_report
 from parse_utils import read_text_safe, PANELS_DIR, OBJECTS_DIR, REPORT_DIR

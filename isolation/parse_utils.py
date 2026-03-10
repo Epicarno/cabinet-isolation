@@ -2,15 +2,16 @@
 Общие утилиты и пути для пайплайна Project Split.
 
 Пути:
-- SCRIPT_DIR  — папка с Python-скриптами (Modules/scripts/)
-- VENT_DIR    — корень ventcontent (Modules/ventcontent/)
-- PANELS_DIR  — данные проекта (ventcontent/panels/)
-- OBJECTS_DIR — объекты XML (ventcontent/panels/objects/)
-- VISION_DIR  — мнемосхемы (ventcontent/panels/vision/)
-- LCSMEMO_DIR — шкафы (ventcontent/panels/vision/LCSMnemo/)
-- CTL_DIR     — скрипты WinCC OA (ventcontent/scripts/libs/objLogic/)
-- REPORT_DIR  — папка отчётов (Modules/reports/)
-- OLD_MNEMO_DIR — бэкап оригинальных мнемосхем (Modules/old_mnemo/)
+- SCRIPT_DIR   — папка isolation-скриптов (scripts/isolation/)
+- MODULES_DIR  — корень рабочей области  (Modules/)
+- VENT_DIR     — корень ventcontent      (Modules/ventcontent/)
+- PANELS_DIR   — данные проекта          (ventcontent/panels/)
+- OBJECTS_DIR  — объекты XML             (ventcontent/panels/objects/)
+- VISION_DIR   — мнемосхемы              (ventcontent/panels/vision/)
+- LCSMEMO_DIR  — шкафы                   (ventcontent/panels/vision/LCSMnemo/)
+- CTL_DIR      — скрипты WinCC OA        (ventcontent/scripts/libs/objLogic/)
+- REPORT_DIR   — папка отчётов           (Modules/reports/)
+- OLD_MNEMO_DIR— бэкап оригинальных мнемосхем (Modules/old_mnemo/)
 
 Утилиты:
 - read_text_safe() — чтение файла с fallback по кодировкам
@@ -24,15 +25,16 @@ import re
 from pathlib import Path
 
 # === Общие пути проекта ===
-SCRIPT_DIR  = Path(__file__).resolve().parent               # Modules/scripts/
-VENT_DIR    = SCRIPT_DIR.parent / "ventcontent"             # Modules/ventcontent/
-PANELS_DIR  = VENT_DIR / "panels"                           # ventcontent/panels/
-OBJECTS_DIR = PANELS_DIR / "objects"                         # panels/objects/
-VISION_DIR  = PANELS_DIR / "vision"                         # panels/vision/
-LCSMEMO_DIR = VISION_DIR / "LCSMnemo"                       # vision/LCSMnemo/
-CTL_DIR     = VENT_DIR / "scripts" / "libs" / "objLogic"    # scripts/libs/objLogic/
-REPORT_DIR  = SCRIPT_DIR.parent / "reports"                 # Modules/reports/
-OLD_MNEMO_DIR = SCRIPT_DIR.parent / "old_mnemo"             # Modules/old_mnemo/
+SCRIPT_DIR   = Path(__file__).resolve().parent               # scripts/isolation/
+MODULES_DIR  = SCRIPT_DIR.parent.parent                      # Modules/
+VENT_DIR     = MODULES_DIR / "ventcontent"                   # Modules/ventcontent/
+PANELS_DIR   = VENT_DIR / "panels"                           # ventcontent/panels/
+OBJECTS_DIR  = PANELS_DIR / "objects"                         # panels/objects/
+VISION_DIR   = PANELS_DIR / "vision"                         # panels/vision/
+LCSMEMO_DIR  = VISION_DIR / "LCSMnemo"                       # vision/LCSMnemo/
+CTL_DIR      = VENT_DIR / "scripts" / "libs" / "objLogic"    # scripts/libs/objLogic/
+REPORT_DIR   = MODULES_DIR / "reports"                       # Modules/reports/
+OLD_MNEMO_DIR = MODULES_DIR / "old_mnemo"                    # Modules/old_mnemo/
 
 
 def read_text_safe(path: Path) -> str | None:
@@ -164,7 +166,7 @@ def find_matching_brace(text: str, open_pos: int) -> int:
     return -1
 
 
-CABINETS_FILE = SCRIPT_DIR / "cabinets.txt"                 # список шкафов
+CABINETS_FILE = SCRIPT_DIR.parent / "cabinets.txt"           # scripts/cabinets.txt
 
 
 def load_active_cabinets() -> set[str] | None:

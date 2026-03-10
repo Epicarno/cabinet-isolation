@@ -16,7 +16,6 @@ import re
 import sys
 import json
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from report_utils import write_report
 from parse_utils import find_matching_brace, read_text_safe, find_cabinet_dirs, PANELS_DIR, OBJECTS_DIR, CTL_DIR, REPORT_DIR
