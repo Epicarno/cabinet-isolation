@@ -64,9 +64,9 @@ def process_cabinet(cabinet_path: Path, no_objects_files: list[str]):
             obj_rel_path = match  # например PV/object/AI/AI.xml
             objects_to_copy.add(obj_rel_path)
 
-        # pathFS пути — добавляем .xml для копирования
+        # pathFS пути — нормализуем: если уже .xml, не дублируем
         for match in pathfs_matches:
-            obj_rel_path = match + ".xml"  # PV/FPs/heatControl_SHD_03_1_P6 → + .xml
+            obj_rel_path = match if match.endswith(".xml") else match + ".xml"
             objects_to_copy.add(obj_rel_path)
 
         # Заменяем в тексте: стандартные пути с .xml
@@ -86,38 +86,18 @@ def process_cabinet(cabinet_path: Path, no_objects_files: list[str]):
             xml_file.write_text(new_text, encoding="utf-8")
             print(f"  [✓] Обновлён: {xml_file.name}")
 
-    # Копируем объекты
-    copied_dirs: set[str] = set()
+    # Копируем объекты — только конкретные файлы (не всю папку!)
     for obj_rel in objects_to_copy:
         src = OBJECTS_DIR / obj_rel
         dst = OBJECTS_DIR / f"objects_{cabinet_name}" / obj_rel
 
-        # Определяем папку объекта (последняя папка перед файлом)
-        # Например для PV/object/AI/AI.xml — копируем всю структуру до файла
-        src_file = src
-        dst_file = dst
-
-        if src_file.exists():
-            # Определяем уникальную папку-объект чтобы не копировать дважды
-            # Берём директорию файла как ключ уникальности
-            obj_dir_key = str(Path(obj_rel).parent)
-            if obj_dir_key in copied_dirs:
-                continue
-            copied_dirs.add(obj_dir_key)
-
-            dst_file.parent.mkdir(parents=True, exist_ok=True)
-
-            # Копируем всю папку объекта (все файлы в ней)
-            src_obj_dir = src_file.parent
-            dst_obj_dir = dst_file.parent
-
-            if not dst_obj_dir.exists() or not any(dst_obj_dir.iterdir()):
-                # Копируем содержимое папки объекта
-                if src_obj_dir.is_dir():
-                    shutil.copytree(src_obj_dir, dst_obj_dir, dirs_exist_ok=True)
-                    print(f"  [→] Скопировано: {obj_dir_key}")
+        if src.exists():
+            if not dst.exists():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+                print(f"  [→] Скопирован: {obj_rel}")
         else:
-            print(f"  [?] Источник не найден: {src_file}")
+            print(f"  [?] Источник не найден: {src}")
 
 
 def main():

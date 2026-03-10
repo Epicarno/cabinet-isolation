@@ -65,9 +65,10 @@ def collect_referenced_files(cabinet_name: str, cabinet_obj_dir: Path) -> set[st
             for m in PATTERN_OLD.finditer(text):
                 referenced.add(m.group(1))
 
-            # pathFS без .xml — добавляем .xml
+            # pathFS — нормализуем: если уже .xml, не дублируем
             for m in PATTERN_PATHFS.finditer(text):
-                referenced.add(m.group(1) + ".xml")
+                raw = m.group(1)
+                referenced.add(raw if raw.endswith(".xml") else raw + ".xml")
 
     # 2. Ссылки из самих объектов шкафа (перекрёстные)
     #    Итеративно — объект A ссылается на B, B на C и т.д.
@@ -98,9 +99,10 @@ def collect_referenced_files(cabinet_name: str, cabinet_obj_dir: Path) -> set[st
             for m in PATTERN_OLD.finditer(text):
                 referenced.add(m.group(1))
 
-            # pathFS без .xml — добавляем .xml
+            # pathFS — нормализуем: если уже .xml, не дублируем
             for m in PATTERN_PATHFS.finditer(text):
-                referenced.add(m.group(1) + ".xml")
+                raw = m.group(1)
+                referenced.add(raw if raw.endswith(".xml") else raw + ".xml")
 
     return referenced
 
