@@ -27,7 +27,7 @@ import shutil
 from pathlib import Path
 
 from parse_utils import (
-    find_cabinet_dirs, SCRIPT_DIR, VENT_DIR,
+    find_cabinet_dirs, MODULES_DIR, VENT_DIR,
     OBJECTS_DIR, LCSMEMO_DIR, CTL_DIR,
 )
 
@@ -35,10 +35,10 @@ from parse_utils import (
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-OUTPUT_DIR = SCRIPT_DIR.parent / "output"
+OUTPUT_DIR = MODULES_DIR / "output"
 
 # Базовый путь — родитель ventcontent (т.е. Modules/)
-BASE_DIR = VENT_DIR.parent
+BASE_DIR = MODULES_DIR
 
 
 def collect_cabinet(cabinet_name: str) -> dict[str, int]:
