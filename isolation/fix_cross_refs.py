@@ -26,6 +26,8 @@ REPORT_FILE = REPORT_DIR / "cross_refs_fix_report.txt"
 
 # Ищем objects/...xml, но НЕ уже заменённые objects/objects_...
 PATTERN = re.compile(r'objects/(?!objects_)(.*?\.xml)')
+# pathFS без .xml: /objects/PV/FPs/heatControl_...
+PATTERN_PATHFS = re.compile(r'/objects/(?!objects_)([^"<>\s]+?)(?=</prop>|")')
 
 
 def process_cabinet(cabinet_dir: Path, report_lines: list[str]) -> dict:
@@ -51,7 +53,8 @@ def process_cabinet(cabinet_dir: Path, report_lines: list[str]) -> dict:
                 continue
 
             matches = PATTERN.findall(text)
-            if not matches:
+            pathfs_matches = PATTERN_PATHFS.findall(text)
+            if not matches and not pathfs_matches:
                 continue
 
             file_rel = str(xml_file.relative_to(PANELS_DIR))
@@ -62,10 +65,22 @@ def process_cabinet(cabinet_dir: Path, report_lines: list[str]) -> dict:
                     objects_to_copy[match] = set()
                 objects_to_copy[match].add(file_rel)
 
-            # Заменяем пути
+            # pathFS — нормализуем .xml
+            for match in pathfs_matches:
+                obj_rel = match if match.endswith(".xml") else match + ".xml"
+                if obj_rel not in objects_to_copy:
+                    objects_to_copy[obj_rel] = set()
+                objects_to_copy[obj_rel].add(file_rel)
+
+            # Заменяем пути: стандартные с .xml
             new_text = PATTERN.sub(
                 lambda m: f"objects/{cabinet_name}/{m.group(1)}",
                 text
+            )
+            # Заменяем pathFS: /objects/... → /objects/<ШКАФ>/...
+            new_text = PATTERN_PATHFS.sub(
+                lambda m: f"/objects/{cabinet_name}/{m.group(1)}",
+                new_text
             )
 
             if new_text != text:
@@ -75,29 +90,19 @@ def process_cabinet(cabinet_dir: Path, report_lines: list[str]) -> dict:
                 stats["refs_replaced"] += replacements
                 found_new = True
 
-        # Копируем недостающие объекты
-        copied_dirs: set[str] = set()
+        # Копируем недостающие объекты — только конкретные файлы
         for obj_rel, referencing_files in objects_to_copy.items():
             src = OBJECTS_DIR / obj_rel
             dst = cabinet_dir / obj_rel
 
-            obj_dir_key = str(Path(obj_rel).parent)
-            if obj_dir_key in copied_dirs:
-                continue
-            copied_dirs.add(obj_dir_key)
-
             if dst.exists():
-                # Уже есть — не копируем
                 continue
 
             if src.exists():
-                src_obj_dir = src.parent
-                dst_obj_dir = dst.parent
-                dst_obj_dir.mkdir(parents=True, exist_ok=True)
-                if src_obj_dir.is_dir():
-                    shutil.copytree(src_obj_dir, dst_obj_dir, dirs_exist_ok=True)
-                    stats["objects_copied"] += 1
-                    found_new = True  # новые файлы — нужен ещё проход
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+                stats["objects_copied"] += 1
+                found_new = True  # новые файлы — нужен ещё проход
             else:
                 missing_key = f"objects/{obj_rel}"
                 if missing_key not in stats["missing"]:
