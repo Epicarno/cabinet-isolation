@@ -33,6 +33,12 @@ PATTERN = re.compile(r'objects/(?!objects_)(.*?\.xml)')
 # WinCC OA автоматически добавляет .xml при открытии фейсплейта
 PATTERN_PATHFS = re.compile(r'/objects/(?!objects_)([^"<>\s]+?)(?=</prop>|")')
 
+# Уже изолированные ссылки — только для копирования (не для переписывания)
+# objects/objects_<ШКАФ>/PV/FPs/heatControl.xml
+PATTERN_ALREADY = re.compile(r'objects/objects_([^/]+)/(.*?\.xml)')
+# pathFS уже изолированный: /objects/objects_<ШКАФ>/PV/FPs/heatControl
+PATTERN_ALREADY_PATHFS = re.compile(r'/objects/objects_([^/]+)/([^"<>\s]+?)(?=</prop>|")')
+
 
 def process_cabinet(cabinet_path: Path, no_objects_files: list[str]):
     """Обработка одной папки-шкафа."""
@@ -51,26 +57,38 @@ def process_cabinet(cabinet_path: Path, no_objects_files: list[str]):
             print(f"  [!] Не удалось прочитать: {xml_file}")
             continue
 
-        # Ищем все вхождения objects/...xml
+        # Ищем все вхождения objects/...xml (ещё не изолированные)
         matches = PATTERN.findall(text)
 
         # Ищем pathFS без .xml: /objects/PV/FPs/heatControl_...
         pathfs_matches = PATTERN_PATHFS.findall(text)
 
-        if not matches and not pathfs_matches:
+        # Ищем уже изолированные ссылки — только для копирования
+        already_matches = PATTERN_ALREADY.findall(text)      # [(шкаф, rel_path)]
+        already_pathfs  = PATTERN_ALREADY_PATHFS.findall(text)
+
+        if not matches and not pathfs_matches and not already_matches and not already_pathfs:
             no_objects_files.append(str(xml_file.relative_to(PANELS_DIR)))
             continue
 
         # Собираем пути объектов для копирования
         for match in matches:
-            # match — это то, что после objects/, например PV/object/AI/AI.xml
-            obj_rel_path = match  # например PV/object/AI/AI.xml
-            objects_to_copy.add(obj_rel_path)
+            objects_to_copy.add(match)
 
         # pathFS пути — нормализуем: если уже .xml, не дублируем
         for match in pathfs_matches:
             obj_rel_path = match if match.endswith(".xml") else match + ".xml"
             objects_to_copy.add(obj_rel_path)
+
+        # Уже изолированные — собираем только если шкаф совпадает
+        for cab, rel_path in already_matches:
+            if cab == cabinet_name:
+                objects_to_copy.add(rel_path)
+
+        for cab, rel_path in already_pathfs:
+            if cab == cabinet_name:
+                obj_rel = rel_path if rel_path.endswith(".xml") else rel_path + ".xml"
+                objects_to_copy.add(obj_rel)
 
         # Заменяем в тексте: стандартные пути с .xml
         new_text = PATTERN.sub(lambda m: f"objects/objects_{cabinet_name}/{m.group(1)}", text)
@@ -138,6 +156,19 @@ def process_cabinet(cabinet_path: Path, no_objects_files: list[str]):
                 ref = raw if raw.endswith(".xml") else raw + ".xml"
                 if ref not in copied:
                     to_scan.add(ref)
+
+            # Уже изолированные перекрёстные ссылки (objects_<шкаф>/...)
+            for m in PATTERN_ALREADY.finditer(clean):
+                cab, rel = m.group(1), m.group(2)
+                if cab == cabinet_name and rel not in copied:
+                    to_scan.add(rel)
+
+            for m in PATTERN_ALREADY_PATHFS.finditer(clean):
+                cab, raw = m.group(1), m.group(2)
+                if cab == cabinet_name:
+                    ref = raw if raw.endswith(".xml") else raw + ".xml"
+                    if ref not in copied:
+                        to_scan.add(ref)
 
         if to_scan:
             print(f"  [↻] Найдено перекрёстных ссылок: {len(to_scan)} (итерация {iteration})")

@@ -29,6 +29,10 @@ PATTERN = re.compile(r'objects/(?!objects_)(.*?\.xml)')
 # pathFS без .xml: /objects/PV/FPs/heatControl_...
 PATTERN_PATHFS = re.compile(r'/objects/(?!objects_)([^"<>\s]+?)(?=</prop>|")')
 
+# Уже изолированные ссылки — для копирования (не для перезаписи)
+PATTERN_ALREADY = re.compile(r'objects/objects_([^/]+)/(.*?\.xml)')
+PATTERN_ALREADY_PATHFS = re.compile(r'/objects/objects_([^/]+)/([^"<>\s]+?)(?=</prop>|")')
+
 
 def process_cabinet(cabinet_dir: Path, report_lines: list[str]) -> dict:
     """Обрабатывает одну папку-шкаф. Возвращает статистику."""
@@ -54,7 +58,9 @@ def process_cabinet(cabinet_dir: Path, report_lines: list[str]) -> dict:
 
             matches = PATTERN.findall(text)
             pathfs_matches = PATTERN_PATHFS.findall(text)
-            if not matches and not pathfs_matches:
+            already_matches = PATTERN_ALREADY.findall(text)
+            already_pathfs  = PATTERN_ALREADY_PATHFS.findall(text)
+            if not matches and not pathfs_matches and not already_matches and not already_pathfs:
                 continue
 
             file_rel = str(xml_file.relative_to(PANELS_DIR))
@@ -71,6 +77,20 @@ def process_cabinet(cabinet_dir: Path, report_lines: list[str]) -> dict:
                 if obj_rel not in objects_to_copy:
                     objects_to_copy[obj_rel] = set()
                 objects_to_copy[obj_rel].add(file_rel)
+
+            # Уже изолированные — только копирование, без перезаписи
+            for cab, rel in already_matches:
+                if f"objects_{cab}" == cabinet_name:
+                    if rel not in objects_to_copy:
+                        objects_to_copy[rel] = set()
+                    objects_to_copy[rel].add(file_rel)
+
+            for cab, raw in already_pathfs:
+                if f"objects_{cab}" == cabinet_name:
+                    obj_rel = raw if raw.endswith(".xml") else raw + ".xml"
+                    if obj_rel not in objects_to_copy:
+                        objects_to_copy[obj_rel] = set()
+                    objects_to_copy[obj_rel].add(file_rel)
 
             # Заменяем пути: стандартные с .xml
             new_text = PATTERN.sub(
