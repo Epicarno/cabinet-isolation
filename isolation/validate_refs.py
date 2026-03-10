@@ -28,7 +28,7 @@ REPORT_FILE = REPORT_DIR / "missing_files_report.txt"
 
 PATTERN = re.compile(r'objects/[^\s"\'<>]+?\.xml')
 # pathFS без .xml: /objects/objects_<ШКАФ>/PV/FPs/heatControl_... (/ опционален)
-PATTERN_PATHFS = re.compile(r'/?(objects/[^\s"\'<>]+?)(?=</prop>|")')
+PATTERN_PATHFS = re.compile(r'/?(objects/[^\s"\'<>\\]+?)(?=</prop>|")')
 
 def build_reverse_map() -> dict[str, set[str]]:
     """

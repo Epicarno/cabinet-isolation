@@ -50,7 +50,7 @@ from parse_utils import read_text_safe, load_active_cabinets
 # Паттерн ссылки на XML-файл внутри objects_<ШКАФ>/
 REF_RE = re.compile(r'objects/objects_[A-Za-z0-9_]+/([\S]*?\.xml)')
 # pathFS без .xml: /objects/objects_<ШКАФ>/PV/FPs/heatControl_SHD_03_1_P6 (/ опционален)
-PATHFS_RE = re.compile(r'/?objects/(objects_[A-Za-z0-9_]+)/([^"<>\s]+?)(?=</prop>|")')
+PATHFS_RE = re.compile(r'/?objects/(objects_[A-Za-z0-9_]+)/([^"<>\s\\]+?)(?=</prop>|")')
 
 # Паттерны комментариев
 SINGLE_LINE_COMMENT = re.compile(r'^\s*//')

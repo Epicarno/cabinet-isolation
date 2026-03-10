@@ -32,13 +32,13 @@ PATTERN = re.compile(r'objects/(?!objects_)(.*?\.xml)')
 # Паттерн для pathFS: /objects/PV/FPs/heatControl_SHD_03_1_P6  (без .xml)
 # Ведущий / опционален — в данных встречаются оба варианта
 # WinCC OA автоматически добавляет .xml при открытии фейсплейта
-PATTERN_PATHFS = re.compile(r'/?objects/(?!objects_)([^"<>\s]+?)(?=</prop>|")')
+PATTERN_PATHFS = re.compile(r'/?objects/(?!objects_)([^"<>\s\\]+?)(?=</prop>|")')
 
 # Уже изолированные ссылки — только для копирования (не для переписывания)
 # objects/objects_<ШКАФ>/PV/FPs/heatControl.xml
 PATTERN_ALREADY = re.compile(r'objects/objects_([^/]+)/(.*?\.xml)')
 # pathFS уже изолированный: /objects/objects_<ШКАФ>/PV/FPs/heatControl (/ опционален)
-PATTERN_ALREADY_PATHFS = re.compile(r'/?objects/objects_([^/]+)/([^"<>\s]+?)(?=</prop>|")')
+PATTERN_ALREADY_PATHFS = re.compile(r'/?objects/objects_([^/]+)/([^"<>\s\\]+?)(?=</prop>|")')
 
 
 def process_cabinet(cabinet_path: Path, no_objects_files: list[str]):

@@ -33,9 +33,9 @@ PATTERN_FULL = re.compile(r'objects/objects_[^/]+/(.*?\.xml)')
 # Ссылки вида objects/...xml (старый формат, если остались)
 PATTERN_OLD = re.compile(r'objects/(?!objects_)(.*?\.xml)')
 # pathFS без .xml: /objects/objects_<ШКАФ>/PV/FPs/heatControl_SHD_03_1_P6 (/ опционален)
-PATTERN_PATHFS = re.compile(r'/?objects/objects_[^/]+/([^"<>\s]+?)(?=</prop>|")')
+PATTERN_PATHFS = re.compile(r'/?objects/objects_[^/]+/([^"<>\s\\]+?)(?=</prop>|")')
 # pathFS старый формат без .xml: objects/PV/FPs/heatControl_... (/ опционален)
-PATTERN_OLD_PATHFS = re.compile(r'/?objects/(?!objects_)([^"<>\s]+?)(?=</prop>|")')
+PATTERN_OLD_PATHFS = re.compile(r'/?objects/(?!objects_)([^"<>\s\\]+?)(?=</prop>|")')
 
 
 def collect_referenced_files(cabinet_name: str, cabinet_obj_dir: Path) -> set[str]:
