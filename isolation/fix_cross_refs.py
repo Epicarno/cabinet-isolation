@@ -26,12 +26,12 @@ REPORT_FILE = REPORT_DIR / "cross_refs_fix_report.txt"
 
 # Ищем objects/...xml, но НЕ уже заменённые objects/objects_...
 PATTERN = re.compile(r'objects/(?!objects_)(.*?\.xml)')
-# pathFS без .xml: /objects/PV/FPs/heatControl_...
-PATTERN_PATHFS = re.compile(r'/objects/(?!objects_)([^"<>\s]+?)(?=</prop>|")')
+# pathFS без .xml: /objects/PV/FPs/heatControl_... (/ опционален)
+PATTERN_PATHFS = re.compile(r'/?objects/(?!objects_)([^"<>\s]+?)(?=</prop>|")')
 
 # Уже изолированные ссылки — для копирования (не для перезаписи)
 PATTERN_ALREADY = re.compile(r'objects/objects_([^/]+)/(.*?\.xml)')
-PATTERN_ALREADY_PATHFS = re.compile(r'/objects/objects_([^/]+)/([^"<>\s]+?)(?=</prop>|")')
+PATTERN_ALREADY_PATHFS = re.compile(r'/?objects/objects_([^/]+)/([^"<>\s]+?)(?=</prop>|")')
 
 
 def process_cabinet(cabinet_dir: Path, report_lines: list[str]) -> dict:

@@ -32,8 +32,10 @@ REPORT_FILE = REPORT_DIR / "orphan_files_report.txt"
 PATTERN_FULL = re.compile(r'objects/objects_[^/]+/(.*?\.xml)')
 # Ссылки вида objects/...xml (старый формат, если остались)
 PATTERN_OLD = re.compile(r'objects/(?!objects_)(.*?\.xml)')
-# pathFS без .xml: /objects/objects_<ШКАФ>/PV/FPs/heatControl_SHD_03_1_P6
-PATTERN_PATHFS = re.compile(r'/objects/objects_[^/]+/([^"<>\s]+?)(?=</prop>|")')
+# pathFS без .xml: /objects/objects_<ШКАФ>/PV/FPs/heatControl_SHD_03_1_P6 (/ опционален)
+PATTERN_PATHFS = re.compile(r'/?objects/objects_[^/]+/([^"<>\s]+?)(?=</prop>|")')
+# pathFS старый формат без .xml: objects/PV/FPs/heatControl_... (/ опционален)
+PATTERN_OLD_PATHFS = re.compile(r'/?objects/(?!objects_)([^"<>\s]+?)(?=</prop>|")')
 
 
 def collect_referenced_files(cabinet_name: str, cabinet_obj_dir: Path) -> set[str]:
@@ -64,6 +66,11 @@ def collect_referenced_files(cabinet_name: str, cabinet_obj_dir: Path) -> set[st
             # На случай если остались старые ссылки
             for m in PATTERN_OLD.finditer(text):
                 referenced.add(m.group(1))
+
+            # Старый формат pathFS без .xml
+            for m in PATTERN_OLD_PATHFS.finditer(text):
+                raw = m.group(1)
+                referenced.add(raw if raw.endswith(".xml") else raw + ".xml")
 
             # pathFS — нормализуем: если уже .xml, не дублируем
             for m in PATTERN_PATHFS.finditer(text):
@@ -98,6 +105,11 @@ def collect_referenced_files(cabinet_name: str, cabinet_obj_dir: Path) -> set[st
 
             for m in PATTERN_OLD.finditer(text):
                 referenced.add(m.group(1))
+
+            # Старый формат pathFS без .xml
+            for m in PATTERN_OLD_PATHFS.finditer(text):
+                raw = m.group(1)
+                referenced.add(raw if raw.endswith(".xml") else raw + ".xml")
 
             # pathFS — нормализуем: если уже .xml, не дублируем
             for m in PATTERN_PATHFS.finditer(text):
