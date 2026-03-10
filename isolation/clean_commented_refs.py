@@ -49,6 +49,8 @@ from parse_utils import read_text_safe, load_active_cabinets
 
 # Паттерн ссылки на XML-файл внутри objects_<ШКАФ>/
 REF_RE = re.compile(r'objects/objects_[A-Za-z0-9_]+/([\S]*?\.xml)')
+# pathFS без .xml: /objects/objects_<ШКАФ>/PV/FPs/heatControl_SHD_03_1_P6
+PATHFS_RE = re.compile(r'/objects/(objects_[A-Za-z0-9_]+)/([^"<>\s]+?)(?=</prop>|")')
 
 # Паттерны комментариев
 SINGLE_LINE_COMMENT = re.compile(r'^\s*//')
@@ -60,6 +62,23 @@ def is_line_commented(line: str) -> bool:
     """Проверяет — начинается ли строка с // (однострочный комментарий)."""
     stripped = line.lstrip()
     return stripped.startswith("//")
+
+
+def _extract_refs_from_line(line: str, obj_prefix: str) -> list[tuple[str, int]]:
+    """Извлекает все ссылки (FileName + pathFS) из строки.
+
+    Returns: [(normalized_rel_path, match_start_position), ...]
+    """
+    refs = []
+    for m in REF_RE.finditer(line):
+        if f"objects/{obj_prefix}/" in m.group(0):
+            refs.append((m.group(1), m.start()))
+    for m in PATHFS_RE.finditer(line):
+        if m.group(1) == obj_prefix:
+            raw = m.group(2)
+            rel = raw if raw.endswith(".xml") else raw + ".xml"
+            refs.append((rel, m.start()))
+    return refs
 
 
 def classify_refs_in_file(filepath: Path, obj_prefix: str
@@ -86,10 +105,8 @@ def classify_refs_in_file(filepath: Path, obj_prefix: str
                 in_block_comment = False
                 # Всё до */ — ещё комментарий, после — код
                 # Для простоты считаем всю строку комментарием
-            for m in REF_RE.finditer(line):
-                full = m.group(0)
-                if f"objects/{obj_prefix}/" in full:
-                    commented[m.group(1)].append((line_no, line.rstrip()))
+            for rel, _pos in _extract_refs_from_line(line, obj_prefix):
+                commented[rel].append((line_no, line.rstrip()))
             continue
 
         if BLOCK_COMMENT_START.search(line) and not BLOCK_COMMENT_END.search(line):
@@ -97,27 +114,20 @@ def classify_refs_in_file(filepath: Path, obj_prefix: str
             # Ссылки до /* — активные, после — комментарийные
             # Для простоты: если строка содержит /*, считаем ссылки комментарийными
             in_block_comment = True
-            for m in REF_RE.finditer(line):
-                full = m.group(0)
-                if f"objects/{obj_prefix}/" in full:
-                    commented[m.group(1)].append((line_no, line.rstrip()))
+            for rel, _pos in _extract_refs_from_line(line, obj_prefix):
+                commented[rel].append((line_no, line.rstrip()))
             continue
 
         # Однострочный комментарий
         is_commented = is_line_commented(line)
 
-        for m in REF_RE.finditer(line):
-            full = m.group(0)
-            if f"objects/{obj_prefix}/" not in full:
-                continue
-            rel = m.group(1)
-
+        for rel, match_pos in _extract_refs_from_line(line, obj_prefix):
             if is_commented:
                 commented[rel].append((line_no, line.rstrip()))
             else:
                 # Ещё проверяем: может ссылка идёт ПОСЛЕ // в той же строке
-                pos = line.find("//")
-                if pos >= 0 and m.start() > pos:
+                comment_pos = line.find("//")
+                if comment_pos >= 0 and match_pos > comment_pos:
                     commented[rel].append((line_no, line.rstrip()))
                 else:
                     active.add(rel)
