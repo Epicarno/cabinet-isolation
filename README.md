@@ -49,13 +49,6 @@ Modules/
 │   │   ├── check_other_scripts.py  ← шаг 9: чужие скрипты → JSON
 │   │   ├── cleanup_classes.py      ← шаг 10: удаление if-блоков
 │   │   └── collect_output.py       ← шаг 11: сборка output/
-│   │
-│   ├── extract_datapoints.py       ← извлечение точек из XML
-│   ├── classify_datapoints.py      ← классификация точек по DPT
-│   ├── full_audit.py               ← аудит XML
-│   ├── check_line_endings.py       ← проверка переводов строк
-│   ├── fix_line_endings.py         ← конвертация CRLF → LF (.ctl)
-│   └── fix_xml_line_endings.py     ← конвертация CRLF → LF (XML)
 │
 ├── ventcontent/                    ← проект WinCC OA
 │   ├── panels/
@@ -91,13 +84,7 @@ Modules/
 │
 ├── reports/                        ← отчёты (генерируются автоматически)
 │   ├── split_ctl_report.txt
-│   ├── other_scripts.json          ← JSON обмен между скриптами
-│   └── datapoints/                 ← отчёты по точкам данных
-│       ├── _all.txt                ← все точки всех шкафов
-│       ├── SHD_03_1.txt            ← точки одного шкафа
-│       ├── _classes.txt            ← DP | DPT-класс | описание
-│       ├── _classes_unique.txt     ← уникальные DPT-классы + счётчик
-│       └── _unmatched.txt          ← точки без класса (если есть)
+│   └── other_scripts.json          ← JSON обмен между скриптами
 ```
 
 ## Пайплайн (11 шагов)
@@ -165,33 +152,6 @@ python run_pipeline.py --only 8     # только шаг 8
     → НЕ удаляет if-блоки для защищённых классов
 ```
 
-## Автономные скрипты
-
-Скрипты, не входящие в основной пайплайн. Запускаются отдельно.
-
-### `extract_datapoints.py` — Извлечение точек данных
-
-Собирает все уникальные datapoint-ы из XML-мнемосхем (атрибут `Name="..."` в тегах `<reference>`). Группирует по мнемосхемам, выводит по шкафам + сводный файл.
-
-```bash
-python extract_datapoints.py             # все шкафы
-```
-
-Результат: `reports/datapoints/_all.txt` + `<ШКАФ>.txt` для каждого шкафа.
-
-### `classify_datapoints.py` — Классификация точек по DPT
-
-Определяет DPT-класс (тип точки данных) для каждого datapoint-а на основе CSV-файлов мнемосхем. CSV содержат колонку `struct` — DPT-класс точки (например `TAIRA_AI`, `KORF_ZD`, `TAIRA_INT_DI`).
-
-Матчинг идёт по двум ключам из CSV: `refName` (имя на объекте мнемосхемы) и `dpName` (имя в проекте WinCC OA). Для 98 % точек они совпадают, но для некоторых refName содержит суффикс, которого нет в dpName.
-
-```bash
-python classify_datapoints.py            # все шкафы
-python classify_datapoints.py SHD_12     # один шкаф
-```
-
-Результат: `reports/datapoints/_classes.txt` (полный список), `_classes_unique.txt` (уникальные классы), `_unmatched.txt` (без класса).
-
 ## Общие модули
 
 ### `parse_utils.py`
@@ -222,15 +182,6 @@ python classify_datapoints.py SHD_12     # один шкаф
 
 - **`write_report(path, lines)`** — запись отчёта. Без `--append` перезаписывает, с `--append` дописывает с таймстампом
 
-## Утилиты
-
-| Скрипт | Описание |
-|--------|----------|
-| `full_audit.py` | Полный аудит XML: все форматы кавычек вокруг struct, паттерны `#uses`, создание объектов классов |
-| `check_line_endings.py` | Проверка переводов строк (CRLF/LF/Mixed) во всех XML |
-| `fix_line_endings.py` | Конвертация CRLF → LF в сгенерированных `Ventcontent_*.ctl` |
-| `fix_xml_line_endings.py` | Конвертация CRLF → LF во всех XML (objects + vision) |
-
 ## Известные особенности
 
 ### Три формата кавычек в XML
@@ -252,10 +203,6 @@ python classify_datapoints.py SHD_12     # один шкаф
 ### setValueLib между классами
 
 Функция `setValueLib` (~строка 5453 оригинала) находится **между** классами, не внутри них. Парсер определяет её отдельно и включает в выходной файл только если хотя бы один нужный класс её вызывает.
-
-### CSV-маппинг точек
-
-CSV-файлы мнемосхем имеют два столбца с именами точек: `refName` (col 0) — имя на объекте мнемосхемы и `dpName` (col 1) — имя точки в проекте. Для большинства точек они совпадают, но в ряде случаев различаются (суффиксы `_1`, `_2`, объединение через `|`). Классификатор индексирует по обоим ключам.
 
 ## Требования
 
