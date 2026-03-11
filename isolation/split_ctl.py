@@ -172,6 +172,11 @@ def parse_ctl(text: str) -> dict:
         pos = m.start()
         inside = any(cs <= pos <= ce for cs, ce, _ in class_ranges)
         if not inside:
+            # Пропускаем закомментированные глобалы (// private global ...)
+            line_start = text.rfind('\n', 0, pos) + 1
+            before_global = text[line_start:pos].strip()
+            if before_global.startswith('//'):
+                continue
             gtype = m.group(2)
             gvar = m.group(3)
             result["global_list"].append((gtype, gvar, m.group(0).strip()))
@@ -201,6 +206,11 @@ def parse_ctl(text: str) -> dict:
 
             entry_pattern = re.compile(r'"(\w+)"\s*,\s*(\w+)')
             for em in entry_pattern.finditer(content):
+                # Пропускаем закомментированные записи
+                line_start = content.rfind('\n', 0, em.start()) + 1
+                before_entry = content[line_start:em.start()].strip()
+                if before_entry.startswith('//'):
+                    continue
                 result["mapping_entries"].append((em.group(1), em.group(2)))
 
     return result
