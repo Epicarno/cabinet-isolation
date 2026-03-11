@@ -1,8 +1,9 @@
 """
-Скрипт для разделения PNR_Ventcontent.ctl на Ventcontent_<ШКАФ>.ctl (v4)
+Скрипт для объединения PNR_Ventcontent.ctl + Denostration_Ventcontent.ctl
+в Ventcontent_<ШКАФ>.ctl (v5)
 
-Ключевое исправление: find_block_end пропускает скобки внутри строк и комментариев.
-Без этого класс KORF_AI (содержащий "{54,205,45}" в строках) съедал весь хвост файла.
+Оба .ctl файла парсятся, классы объединяются, и для каждого шкафа
+генерируется единый Ventcontent_<ШКАФ>.ctl с нужными классами из обоих.
 
 Результат: scripts/Ventcontent_<ШКАФ>.ctl + split_ctl_report.txt
 """
@@ -19,9 +20,10 @@ from parse_utils import read_text_safe, find_mnemo_dirs, LCSMEMO_DIR, CTL_DIR, R
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-CTL_FILE    = CTL_DIR / "PNR_Ventcontent.ctl"
-SCRIPTS_DIR = CTL_DIR
-REPORT_FILE = REPORT_DIR / "split_ctl_report.txt"
+CTL_FILE      = CTL_DIR / "PNR_Ventcontent.ctl"
+DEMO_CTL_FILE = Path(__file__).resolve().parent / "Denostration_Ventcontent.ctl"
+SCRIPTS_DIR   = CTL_DIR
+REPORT_FILE   = REPORT_DIR / "split_ctl_report.txt"
 
 
 def find_block_end(text: str, start: int) -> int:
@@ -120,6 +122,11 @@ def parse_ctl(text: str) -> dict:
     class_pattern = re.compile(r'\bclass\s+(\w+)\s*(?::\s*(\w+))?\s*\{', re.DOTALL)
     class_positions = []
     for m in class_pattern.finditer(text):
+        # Пропускаем закомментированные классы (// class ...)
+        line_start = text.rfind('\n', 0, m.start()) + 1
+        before_class = text[line_start:m.start()].strip()
+        if before_class.startswith('//'):
+            continue
         class_positions.append((m.start(), m.group(1), m.group(2)))
 
     # Для быстрой проверки "внутри класса ли позиция"
@@ -170,9 +177,9 @@ def parse_ctl(text: str) -> dict:
             result["global_list"].append((gtype, gvar, m.group(0).strip()))
             result["global_type_to_var"][gtype] = gvar
 
-    # === mapping mapClassVent (вне классов) ===
+    # === mapping mapClassVent / mapClass (вне классов) ===
     mapping_match = re.search(
-        r'(public\s+const\s+mapping\s+mapClassVent\s*=\s*makeMapping\s*\()',
+        r'(public\s+const\s+mapping\s+(?:mapClassVent|mapClass)\s*=\s*makeMapping\s*\()',
         text, re.MULTILINE
     )
     if mapping_match:
@@ -199,9 +206,10 @@ def parse_ctl(text: str) -> dict:
     return result
 
 
-def get_cabinet_structs(cabinet_name: str) -> set[str]:
-    """Собирает уникальные struct из CSV."""
-    structs = set()
+def get_cabinet_structs(cabinet_name: str) -> dict[str, set[str]]:
+    """Собирает уникальные struct из CSV и запоминает, в каких CSV они встречаются.
+    Возвращает dict: struct_name → set(csv_filename без пути)."""
+    structs: dict[str, set[str]] = {}
     cabinet_dir = LCSMEMO_DIR / cabinet_name
     if not cabinet_dir.exists():
         return structs
@@ -209,12 +217,95 @@ def get_cabinet_structs(cabinet_name: str) -> set[str]:
         csv_text = read_text_safe(csv_file)
         if csv_text is None:
             continue
+        # Имя CSV относительно папки шкафа
+        csv_name = csv_file.relative_to(cabinet_dir).as_posix()
         reader = csv.reader(csv_text.strip().split('\n'))
         next(reader, None)  # пропускаем заголовок
         for row in reader:
             if len(row) >= 5 and row[4].strip():
-                structs.add(row[4].strip())
+                s = row[4].strip()
+                structs.setdefault(s, set()).add(csv_name)
     return structs
+
+
+def merge_parsed(pnr: dict, demo: dict) -> dict:
+    """
+    Объединяет результаты парсинга PNR и Demo в единую структуру.
+    PNR-версия skifcontent приоритетнее (содержит доп. поля).
+    """
+    merged = {
+        "uses_lines": [],
+        "skifcontent_text": pnr["skifcontent_text"] or demo["skifcontent_text"],
+        "class_blocks": {},
+        "class_parents": {},
+        "class_order": [],
+        "setValueLib_text": "",
+        "global_list": [],
+        "global_type_to_var": {},
+        "mapping_entries": [],
+        "mapping_header": "",
+        "classes_using_setValueLib": set(),
+    }
+
+    # #uses — уникальные строки
+    seen_uses: set[str] = set()
+    for line in pnr["uses_lines"] + demo["uses_lines"]:
+        stripped = line.strip()
+        if stripped not in seen_uses:
+            seen_uses.add(stripped)
+            merged["uses_lines"].append(line)
+
+    # Классы: сначала PNR, потом Demo (без дублей)
+    for src in (pnr, demo):
+        for name in src["class_order"]:
+            if name not in merged["class_blocks"]:
+                merged["class_blocks"][name] = src["class_blocks"][name]
+                merged["class_parents"][name] = src["class_parents"][name]
+                merged["class_order"].append(name)
+                if name in src["classes_using_setValueLib"]:
+                    merged["classes_using_setValueLib"].add(name)
+
+    # setValueLib — PNR приоритетнее, но если нет — берём Demo
+    merged["setValueLib_text"] = pnr["setValueLib_text"] or demo["setValueLib_text"]
+
+    # global_list — PNR первый, потом Demo (без дублей по type)
+    # При конфликте имён переменных — суффиксируем Demo-переменную (_1, _2, ...)
+    merged["global_list"] = list(pnr["global_list"])
+    merged["global_type_to_var"] = dict(pnr["global_type_to_var"])
+    used_vars = {gvar for _, gvar, _ in merged["global_list"]}
+    demo_var_rename: dict[str, str] = {}  # old_var -> new_var
+    for gtype, gvar, gline in demo["global_list"]:
+        if gtype not in merged["global_type_to_var"]:
+            new_var = gvar
+            if new_var in used_vars:
+                # Конфликт имён — ищем свободное имя
+                suffix = 1
+                while f"{gvar}_{suffix}" in used_vars:
+                    suffix += 1
+                new_var = f"{gvar}_{suffix}"
+                # Обновляем строку global
+                gline = re.sub(rf'\b{re.escape(gvar)}\s*;', f'{new_var};', gline)
+            used_vars.add(new_var)
+            merged["global_list"].append((gtype, new_var, gline))
+            merged["global_type_to_var"][gtype] = new_var
+            if gvar != new_var:
+                demo_var_rename[gvar] = new_var
+
+    # mapping — PNR первый, потом Demo (без дублей по ключу)
+    merged["mapping_entries"] = list(pnr["mapping_entries"])
+    # Header всегда mapClassVent (PNR формат), даже если взят из Demo
+    header = pnr["mapping_header"] or demo["mapping_header"]
+    if header:
+        header = re.sub(r'\bmapClass\b', 'mapClassVent', header)
+    merged["mapping_header"] = header
+    pnr_keys = {k for k, _ in pnr["mapping_entries"]}
+    for mkey, mvar in demo["mapping_entries"]:
+        if mkey not in pnr_keys:
+            # Применяем переименование переменной если было
+            actual_var = demo_var_rename.get(mvar, mvar)
+            merged["mapping_entries"].append((mkey, actual_var))
+
+    return merged
 
 
 def resolve_needed_classes(structs: set[str], parsed: dict) -> set[str]:
@@ -322,18 +413,41 @@ def main():
         print(f"Файл не найден: {CTL_FILE}")
         return
 
+    # --- Парсинг PNR ---
     print("Парсинг PNR_Ventcontent.ctl...")
-    text = read_text_safe(CTL_FILE)
-    if text is None:
+    pnr_text = read_text_safe(CTL_FILE)
+    if pnr_text is None:
         print(f"Не удалось прочитать: {CTL_FILE}")
         return
+    pnr_parsed = parse_ctl(pnr_text)
+    pnr_classes = set(pnr_parsed["class_blocks"].keys())
+    print(f"  Классов: {len(pnr_classes)}")
+    print(f"  Global: {len(pnr_parsed['global_list'])}")
+    print(f"  Mapping: {len(pnr_parsed['mapping_entries'])}")
 
-    parsed = parse_ctl(text)
+    # --- Парсинг Demo (опционально) ---
+    demo_parsed = None
+    demo_classes: set[str] = set()
+    if DEMO_CTL_FILE.exists():
+        print("Парсинг Denostration_Ventcontent.ctl...")
+        demo_text = read_text_safe(DEMO_CTL_FILE)
+        if demo_text is not None:
+            demo_parsed = parse_ctl(demo_text)
+            demo_classes = set(demo_parsed["class_blocks"].keys())
+            print(f"  Классов: {len(demo_classes)}")
+        else:
+            print("  ⚠ Не удалось прочитать — пропускаем")
+    else:
+        print(f"Denostration_Ventcontent.ctl не найден — только PNR")
+
+    # --- Объединение ---
+    if demo_parsed:
+        parsed = merge_parsed(pnr_parsed, demo_parsed)
+    else:
+        parsed = pnr_parsed
+
     all_classes = set(parsed["class_blocks"].keys())
-
-    print(f"  Классов: {len(all_classes)}")
-    print(f"  Global: {len(parsed['global_list'])}")
-    print(f"  Mapping: {len(parsed['mapping_entries'])}")
+    print(f"\nИтого: {len(all_classes)} классов (PNR: {len(pnr_classes)}, Demo: {len(demo_classes)})")
 
     # Валидация: ни один class не должен содержать private global
     for name in parsed["class_order"]:
@@ -357,23 +471,50 @@ def main():
     SCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
 
     report: list[str] = []
-    report.append("Отчёт по разделению PNR_Ventcontent.ctl (v4)")
+    report.append("Отчёт: PNR + Denostration → Ventcontent_<ШКАФ>.ctl (v5)")
     report.append("=" * 60)
-    report.append(f"Оригинал: {len(all_classes)} классов, "
-                   f"{len(parsed['global_list'])} global, "
-                   f"{len(parsed['mapping_entries'])} mapping")
+    report.append(f"PNR: {len(pnr_classes)} классов, "
+                   f"{len(pnr_parsed['global_list'])} global, "
+                   f"{len(pnr_parsed['mapping_entries'])} mapping")
+    report.append(f"Demo: {len(demo_classes)} классов")
+    report.append(f"Итого (объединение): {len(all_classes)} классов")
     report.append("")
 
     total = 0
 
     for cabinet in cabinets:
-        structs = get_cabinet_structs(cabinet)
-        if not structs:
+        structs_map = get_cabinet_structs(cabinet)
+        if not structs_map:
             report.append(f"[{cabinet}] Нет struct — пропуск")
             continue
 
+        structs = set(structs_map.keys())
         needed = resolve_needed_classes(structs, parsed)
         excluded = all_classes - needed
+
+        # Собираем CSV-файлы для каждого нужного класса
+        csv_by_class: dict[str, set[str]] = {}
+        var_to_type = {}
+        for gtype, gvar, _ in parsed["global_list"]:
+            var_to_type[gvar] = gtype
+        key_to_var = {}
+        for mkey, mvar in parsed["mapping_entries"]:
+            key_to_var[mkey] = mvar
+
+        for struct, csv_files in structs_map.items():
+            matched_class = None
+            if struct in all_classes and struct in needed:
+                matched_class = struct
+            elif struct in key_to_var:
+                var = key_to_var[struct]
+                if var in var_to_type:
+                    gtype = var_to_type[var]
+                    if gtype in needed:
+                        matched_class = gtype
+            elif struct in parsed["global_type_to_var"] and struct in needed:
+                matched_class = struct
+            if matched_class:
+                csv_by_class.setdefault(matched_class, set()).update(csv_files)
 
         ctl_content = build_ctl(needed, parsed)
 
@@ -401,7 +542,13 @@ def main():
         if needed:
             report.append("  Включены:")
             for c in sorted(needed):
-                report.append(f"    ✓ {c}")
+                src = "PNR" if c in pnr_classes else "Demo"
+                csvs = csv_by_class.get(c, set())
+                if csvs:
+                    csv_list = ", ".join(sorted(csvs))
+                    report.append(f"    ✓ {c}  [{src}]  ← {csv_list}")
+                else:
+                    report.append(f"    ✓ {c}  [{src}]  (родитель)")
 
         report.append(f"  → {output.name}")
         report.append("")
