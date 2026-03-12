@@ -6,12 +6,13 @@
 Modules/
 ├── scripts/                        ← Python-скрипты (этот репозиторий)
 │   ├── cabinets.txt                ← список шкафов для обработки (фильтр)
-│   ├── parse_utils.py              ← общие утилиты и пути проекта
-│   ├── report_utils.py             ← запись отчётов (--append режим)
 │   │
 │   ├── isolation/                  ← Пайплайн изоляции шкафов
 │   │   ├── run_pipeline.py         ← раннер пайплайна
-│   │   ├── run_pipeline.bat        ← обёртка для CMD
+│   │   ├── run_pipeline.bat        ← обёртка для CMD (Windows)
+│   │   ├── parse_utils.py          ← общие утилиты и пути проекта
+│   │   ├── report_utils.py         ← запись отчётов (--append режим)
+│   │   ├── Denostration_Ventcontent.ctl ← Demo-библиотека (встроена)
 │   │   ├── process_mnemo.py        ← шаг 1: копирование объектов
 │   │   ├── fix_cross_refs.py       ← шаг 2: перекрёстные ссылки
 │   │   ├── cleanup_orphans.py      ← шаг 3: удаление сирот
@@ -78,21 +79,36 @@ SHD_05_1
 
 ### Запуск
 
-Основной раннер — `run_pipeline.py` (Python). Файл `run_pipeline.bat` — тонкая обёртка, которая просто вызывает `python run_pipeline.py %*`.
+Основной раннер — `run_pipeline.py` (Python). Файл `run_pipeline.bat` — тонкая обёртка для CMD.
+
+**Важно: репозиторий клонируется как `Modules/scripts/`**, а не внутрь `ventcontent/`:
 
 ```bash
-# Через bat-обёртку (для CMD):
-cd scripts/isolation
-run_pipeline.bat                    # полный запуск
-run_pipeline.bat --append           # дописывать в существующие отчёты
-run_pipeline.bat --from 5           # продолжить с шага 5
-run_pipeline.bat --only 10          # запустить только шаг 10
+cd /path/to/Modules
+git clone https://github.com/Epicarno/cabinet-isolation scripts
+```
 
-# Напрямую через Python (рекомендуется):
-cd scripts/isolation
-python run_pipeline.py              # полный запуск
-python run_pipeline.py --from 5     # продолжить с шага 5
-python run_pipeline.py --only 8     # только шаг 8
+Результат:
+```
+Modules/
+├── scripts/          ← этот репозиторий
+├── ventcontent/      ← проект WinCC OA (отдельный репо)
+├── reports/          ← генерируются автоматически
+└── output/           ← генерируются автоматически
+```
+
+```bash
+# Windows (CMD):
+cd scripts\isolation
+run_pipeline.bat                    # полный запуск
+run_pipeline.bat --from 5           # продолжить с шага 5
+
+# Windows / Linux / macOS (Python, рекомендуется):
+cd scripts
+python3 isolation/run_pipeline.py              # полный запуск
+python3 isolation/run_pipeline.py --from 5     # продолжить с шага 5
+python3 isolation/run_pipeline.py --only 8     # только шаг 8
+python3 isolation/run_pipeline.py --append     # дописывать в отчёты
 ```
 
 ### Шаги
