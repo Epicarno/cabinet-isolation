@@ -32,19 +32,20 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+PYTHON = sys.executable  # тот же интерпретатор, которым запущен run_pipeline.py
 
 STEPS = [
-    (1,  "process_mnemo.py",           ["python", "process_mnemo.py"]),
-    (2,  "fix_cross_refs.py",          ["python", "fix_cross_refs.py"]),
-    (3,  "cleanup_orphans.py (mode 2)",["python", "cleanup_orphans.py", "2"]),
-    (4,  "clean_commented_refs.py",    ["python", "clean_commented_refs.py", "--apply"]),
-    (5,  "validate_refs.py",           ["python", "validate_refs.py"]),
-    (6,  "split_ctl.py",              ["python", "split_ctl.py"]),
-    (7,  "replace_scripts.py",         ["python", "replace_scripts.py"]),
-    (8,  "scan_problems.py (analysis)",["python", "scan_problems.py"]),
-    (9,  "check_other_scripts.py (→ JSON)", ["python", "check_other_scripts.py"]),
-    (10, "cleanup_classes.py (uses JSON)",  ["python", "cleanup_classes.py"]),
-    (11, "collect_output.py (deploy)", ["python", "collect_output.py", "--clean"]),
+    (1,  "process_mnemo.py",           [PYTHON, "process_mnemo.py"]),
+    (2,  "fix_cross_refs.py",          [PYTHON, "fix_cross_refs.py"]),
+    (3,  "cleanup_orphans.py (mode 2)",[PYTHON, "cleanup_orphans.py", "2"]),
+    (4,  "clean_commented_refs.py",    [PYTHON, "clean_commented_refs.py", "--apply"]),
+    (5,  "validate_refs.py",           [PYTHON, "validate_refs.py"]),
+    (6,  "split_ctl.py",              [PYTHON, "split_ctl.py"]),
+    (7,  "replace_scripts.py",         [PYTHON, "replace_scripts.py"]),
+    (8,  "scan_problems.py (analysis)",[PYTHON, "scan_problems.py"]),
+    (9,  "check_other_scripts.py (→ JSON)", [PYTHON, "check_other_scripts.py"]),
+    (10, "cleanup_classes.py (uses JSON)",  [PYTHON, "cleanup_classes.py"]),
+    (11, "collect_output.py (deploy)", [PYTHON, "collect_output.py", "--clean"]),
 ]
 
 TOTAL = len(STEPS)
@@ -66,6 +67,8 @@ def run_step(num: int, name: str, cmd: list[str], append: bool) -> bool:
 
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
+    # Гарантируем что scripts/isolation/ в PYTHONPATH для импорта report_utils/parse_utils
+    env["PYTHONPATH"] = SCRIPTS_DIR + os.pathsep + env.get("PYTHONPATH", "")
 
     t0 = time.time()
     result = subprocess.run(
